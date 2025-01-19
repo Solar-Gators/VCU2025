@@ -308,7 +308,7 @@ void StartTask02(void *argument)
   for(;;)
   {
 	//updates dac output with throttle data
-
+	HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, throttle);
     osDelay(20);
 
   }
