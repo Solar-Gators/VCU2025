@@ -59,19 +59,12 @@ const osThreadAttr_t UpdateThrottle_attributes = {
   .stack_size = 128 * 4,
   .priority = (osPriority_t) osPriorityAboveNormal,
 };
-/* Definitions for BrakeLights */
-osThreadId_t BrakeLightsHandle;
-const osThreadAttr_t BrakeLights_attributes = {
-  .name = "BrakeLights",
+/* Definitions for RearLights */
+osThreadId_t RearLightsHandle;
+const osThreadAttr_t RearLights_attributes = {
+  .name = "RearLights",
   .stack_size = 128 * 4,
   .priority = (osPriority_t) osPriorityNormal,
-};
-/* Definitions for turnIndicators */
-osThreadId_t turnIndicatorsHandle;
-const osThreadAttr_t turnIndicators_attributes = {
-  .name = "turnIndicators",
-  .stack_size = 128 * 4,
-  .priority = (osPriority_t) osPriorityAboveNormal,
 };
 /* USER CODE BEGIN PV */
 
@@ -85,7 +78,6 @@ static void MX_CAN1_Init(void);
 void StartDefaultTask(void *argument);
 void StartTask02(void *argument);
 void StartTask03(void *argument);
-void StartTask04(void *argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -114,9 +106,27 @@ uint8_t rl_turn;
 uint8_t rr_turn;
 uint8_t strb_light_en;
 
+CAN_RxHeaderTypeDef RxHeader;
+uint8_t RxData[8];  // Array to store the received data
 
+//CAN transmission
 
+void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
+{
 
+    // Retrieve the received message from FIFO 0
+    if (HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &RxHeader, RxData) != HAL_OK) {
+        // Error handling
+        Error_Handler();
+    }
+
+    // Process the received data
+    // Example: Check the received ID
+    if (RxHeader.StdId == 0x321) {
+        // Process the received data in RxData
+
+    }
+}
 
 /* USER CODE END 0 */
 
@@ -128,6 +138,19 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
+	CAN_TxHeaderTypeDef TxHeader;
+	uint8_t TxData[8];
+	uint32_t TxMailbox;
+
+	TxHeader.IDE = CAN_ID_STD;
+	TxHeader.StdId = 0x446;
+	TxHeader.RTR = CAN_RTR_DATA;
+	TxHeader.DLC = 2;
+
+	if (HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK)
+	{
+		  Error_Handler();
+	}
 
   /* USER CODE END 1 */
 
@@ -181,11 +204,8 @@ int main(void)
   /* creation of UpdateThrottle */
   UpdateThrottleHandle = osThreadNew(StartTask02, NULL, &UpdateThrottle_attributes);
 
-  /* creation of BrakeLights */
-  BrakeLightsHandle = osThreadNew(StartTask03, NULL, &BrakeLights_attributes);
-
-  /* creation of turnIndicators */
-  turnIndicatorsHandle = osThreadNew(StartTask04, NULL, &turnIndicators_attributes);
+  /* creation of RearLights */
+  RearLightsHandle = osThreadNew(StartTask03, NULL, &RearLights_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -215,6 +235,7 @@ int main(void)
   * @brief System Clock Configuration
   * @retval None
   */
+
 void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
@@ -271,10 +292,10 @@ static void MX_CAN1_Init(void)
 
   /* USER CODE END CAN1_Init 1 */
   hcan1.Instance = CAN1;
-  hcan1.Init.Prescaler = 16;
+  hcan1.Init.Prescaler = 2;
   hcan1.Init.Mode = CAN_MODE_NORMAL;
   hcan1.Init.SyncJumpWidth = CAN_SJW_1TQ;
-  hcan1.Init.TimeSeg1 = CAN_BS1_1TQ;
+  hcan1.Init.TimeSeg1 = CAN_BS1_2TQ;
   hcan1.Init.TimeSeg2 = CAN_BS2_1TQ;
   hcan1.Init.TimeTriggeredMode = DISABLE;
   hcan1.Init.AutoBusOff = DISABLE;
@@ -420,12 +441,17 @@ static void MX_GPIO_Init(void)
 void StartDefaultTask(void *argument)
 {
   /* USER CODE BEGIN 5 */
+
+
   /* Infinite loop */
   for(;;)
   {
 	HAL_GPIO_TogglePin(GPIOB, 13);
     osDelay(500);
+
   }
+
+
   /* USER CODE END 5 */
 }
 
@@ -473,43 +499,38 @@ void StartTask02(void *argument)
 void StartTask03(void *argument)
 {
   /* USER CODE BEGIN StartTask03 */
+	int counter = 0;
   /* Infinite loop */
   for(;;)
   {
 	HAL_GPIO_Write(GPIOC, 0, rc_light_en);
-	HAL_GPIO_Write(GPIOC, 1, rr_light_en);
-	HAL_GPIO_Write(GPIOC, 14, rl_light_en);
+
+    if (counter == 0) {
+    	if (rl_turn == 1) {
+    	    HAL_GPIO_Toggle(GPIOC, 0);
+    	}
+    	if (rr_turn == 1) {
+    	    HAL_GPIO_Toggle(GPIOC, 1);
+    	}
+    	if (strb_light_en == 1) {
+    	    HAL_GPIO_Toggle(GPIOC, 15);
+    	}
+    }
+
+    if (rl_turn == 0) {
+    	HAL_GPIO_Write(GPIOC, 14, rl_light_en);
+    }
+    if (rr_turn == 0) {
+    	HAL_GPIO_Write(GPIOC, 1, rr_light_en);
+    }
+
+
+    counter += 100;
+    counter = counter%500;
     osDelay(100);
+
   }
   /* USER CODE END StartTask03 */
-}
-
-/* USER CODE BEGIN Header_StartTask04 */
-/**
-* @brief Function implementing the turnIndicators thread.
-* @param argument: Not used
-* @retval None
-*/
-/* USER CODE END Header_StartTask04 */
-void StartTask04(void *argument)
-{
-  /* USER CODE BEGIN StartTask04 */
-  /* Infinite loop */
-  for(;;)
-  {
-	if (rl_turn == 1) {
-		HAL_GPIO_Toggle(GPIOC, 0);
-	}
-	if (rr_turn == 1) {
-		HAL_GPIO_Toggle(GPIOC, 1);
-	}
-
-	if (strb_light_en == 1) {
-		HAL_GPIO_Toggle(GPIOC, 15);
-	}
-    osDelay(500);
-  }
-  /* USER CODE END StartTask04 */
 }
 
 /**
