@@ -45,6 +45,8 @@ CAN_HandleTypeDef hcan1;
 
 DAC_HandleTypeDef hdac1;
 
+I2C_HandleTypeDef hi2c1;
+
 /* Definitions for HeartBeat */
 osThreadId_t HeartBeatHandle;
 const osThreadAttr_t HeartBeat_attributes = {
@@ -59,10 +61,17 @@ const osThreadAttr_t UpdateThrottle_attributes = {
   .stack_size = 128 * 4,
   .priority = (osPriority_t) osPriorityAboveNormal,
 };
-/* Definitions for RearLights */
-osThreadId_t RearLightsHandle;
-const osThreadAttr_t RearLights_attributes = {
-  .name = "RearLights",
+/* Definitions for LightsControl */
+osThreadId_t LightsControlHandle;
+const osThreadAttr_t LightsControl_attributes = {
+  .name = "LightsControl",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
+/* Definitions for ReadSensors */
+osThreadId_t ReadSensorsHandle;
+const osThreadAttr_t ReadSensors_attributes = {
+  .name = "ReadSensors",
   .stack_size = 128 * 4,
   .priority = (osPriority_t) osPriorityNormal,
 };
@@ -75,9 +84,11 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_DAC1_Init(void);
 static void MX_CAN1_Init(void);
-void StartDefaultTask(void *argument);
-void StartTask02(void *argument);
-void StartTask03(void *argument);
+static void MX_I2C1_Init(void);
+void Heart_Beat(void *argument);
+void Update_Throttle(void *argument);
+void Lights_Control(void *argument);
+void Read_Sensors(void *argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -111,6 +122,13 @@ uint8_t RxData[8];  // Array to store the received data
 
 //CAN transmission
 
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_PIN)
+{
+	if (GPIO_PIN == GPIO_PIN_13) {
+
+	}
+}
+
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 {
 
@@ -122,8 +140,10 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 
     // Process the received data
     // Example: Check the received ID
-    if (RxHeader.StdId == 0x321) {
+    if (RxData[0] == 0) {
         // Process the received data in RxData
+
+    	throttle = (uint16_t)RxData[1]<<8 | RxData[2];
 
     }
 }
@@ -160,7 +180,7 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-
+  hdac1.State = HAL_DAC_STATE_RESET;
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -174,8 +194,10 @@ int main(void)
   MX_GPIO_Init();
   MX_DAC1_Init();
   MX_CAN1_Init();
+  MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
-
+  HAL_DAC_Start(&hdac1,DAC_CHANNEL_1); //Start DAC 1 and 2
+  HAL_DAC_Start(&hdac1,DAC_CHANNEL_2);
   /* USER CODE END 2 */
 
   /* Init scheduler */
@@ -199,13 +221,16 @@ int main(void)
 
   /* Create the thread(s) */
   /* creation of HeartBeat */
-  HeartBeatHandle = osThreadNew(StartDefaultTask, NULL, &HeartBeat_attributes);
+  HeartBeatHandle = osThreadNew(Heart_Beat, NULL, &HeartBeat_attributes);
 
   /* creation of UpdateThrottle */
-  UpdateThrottleHandle = osThreadNew(StartTask02, NULL, &UpdateThrottle_attributes);
+  UpdateThrottleHandle = osThreadNew(Update_Throttle, NULL, &UpdateThrottle_attributes);
 
-  /* creation of RearLights */
-  RearLightsHandle = osThreadNew(StartTask03, NULL, &RearLights_attributes);
+  /* creation of LightsControl */
+  LightsControlHandle = osThreadNew(Lights_Control, NULL, &LightsControl_attributes);
+
+  /* creation of ReadSensors */
+  ReadSensorsHandle = osThreadNew(Read_Sensors, NULL, &ReadSensors_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -235,7 +260,6 @@ int main(void)
   * @brief System Clock Configuration
   * @retval None
   */
-
 void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
@@ -364,6 +388,54 @@ static void MX_DAC1_Init(void)
 }
 
 /**
+  * @brief I2C1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_I2C1_Init(void)
+{
+
+  /* USER CODE BEGIN I2C1_Init 0 */
+
+  /* USER CODE END I2C1_Init 0 */
+
+  /* USER CODE BEGIN I2C1_Init 1 */
+
+  /* USER CODE END I2C1_Init 1 */
+  hi2c1.Instance = I2C1;
+  hi2c1.Init.Timing = 0x00100D14;
+  hi2c1.Init.OwnAddress1 = 0;
+  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c1.Init.OwnAddress2 = 0;
+  hi2c1.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
+  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Analogue filter
+  */
+  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c1, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Digital filter
+  */
+  if (HAL_I2CEx_ConfigDigitalFilter(&hi2c1, 0) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C1_Init 2 */
+
+  /* USER CODE END I2C1_Init 2 */
+
+}
+
+/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -383,7 +455,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, MC_Main_Pin|GPIO_PIN_1|GPIO_PIN_2, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1|GPIO_PIN_13, GPIO_PIN_RESET);
@@ -401,8 +473,8 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PA0 PA1 PA2 */
-  GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2;
+  /*Configure GPIO pins : MC_Main_Pin PA1 PA2 */
+  GPIO_InitStruct.Pin = MC_Main_Pin|GPIO_PIN_1|GPIO_PIN_2;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -431,14 +503,14 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE END 4 */
 
-/* USER CODE BEGIN Header_StartDefaultTask */
+/* USER CODE BEGIN Header_Heart_Beat */
 /**
   * @brief  Function implementing the HeartBeat thread.
   * @param  argument: Not used
   * @retval None
   */
-/* USER CODE END Header_StartDefaultTask */
-void StartDefaultTask(void *argument)
+/* USER CODE END Header_Heart_Beat */
+void Heart_Beat(void *argument)
 {
   /* USER CODE BEGIN 5 */
 
@@ -446,7 +518,7 @@ void StartDefaultTask(void *argument)
   /* Infinite loop */
   for(;;)
   {
-	HAL_GPIO_TogglePin(GPIOB, 13);
+	HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_13);
     osDelay(500);
 
   }
@@ -455,82 +527,98 @@ void StartDefaultTask(void *argument)
   /* USER CODE END 5 */
 }
 
-/* USER CODE BEGIN Header_StartTask02 */
+/* USER CODE BEGIN Header_Update_Throttle */
 /**
 * @brief Function implementing the UpdateThrottle thread.
 * @param argument: Not used
 * @retval None
 */
-/* USER CODE END Header_StartTask02 */
-void StartTask02(void *argument)
+/* USER CODE END Header_Update_Throttle */
+void Update_Throttle(void *argument)
 {
-  /* USER CODE BEGIN StartTask02 */
+  /* USER CODE BEGIN Update_Throttle */
   /* Infinite loop */
   for(;;)
   {
-	//updates dac output with throttle data
-	HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, throttle);
-	HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, regen);
+	  HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, throttle);
+	  HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, regen);
 
-	//updates gpio pins with states from global variables
-	HAL_GPIO_Write(GPIOA, 0, mc_main_ctrl);
-	HAL_GPIO_Write(GPIOA, 1, mc_pwreco_ctrl);
-	HAl_GPIO_Write(GPIOA, 2, mc_fwdrev_ctrl);
-	HAL_GPIO_Write(GPIOB, 3, fan_en);
-	HAL_GPIO_Write(GPIOB, 4, horn_en);
-	HAL_GPIO_Write(GPIOC, 2, mppt_pre_contactor_en);
-	HAL_GPIO_Write(GPIOC, 3, mppt_contactor_en);
-	HAL_GPIO_Write(GPIOB, 1, imu_int);
+	  //updates gpio pins with states from global variables
+	  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0, mc_main_ctrl);
+	  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, mc_pwreco_ctrl);
+	  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, mc_fwdrev_ctrl);
+	  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, fan_en);
+	  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, horn_en);
+	  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_2, mppt_pre_contactor_en);
+	  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_3, mppt_contactor_en);
 
-
-    osDelay(20);
-
+	  osDelay(20);
   }
-  /* USER CODE END StartTask02 */
+  /* USER CODE END Update_Throttle */
 }
 
-/* USER CODE BEGIN Header_StartTask03 */
+/* USER CODE BEGIN Header_Lights_Control */
 /**
-* @brief Function implementing the BrakeLights thread.
+* @brief Function implementing the LightsControl thread.
 * @param argument: Not used
 * @retval None
 */
-/* USER CODE END Header_StartTask03 */
-void StartTask03(void *argument)
+/* USER CODE END Header_Lights_Control */
+void Lights_Control(void *argument)
 {
-  /* USER CODE BEGIN StartTask03 */
-	int counter = 0;
+  /* USER CODE BEGIN Lights_Control */
+  int counter = 0;
+
   /* Infinite loop */
   for(;;)
   {
-	HAL_GPIO_Write(GPIOC, 0, rc_light_en);
+	  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0, rc_light_en); //sets center rear light (brake light)
 
-    if (counter == 0) {
-    	if (rl_turn == 1) {
-    	    HAL_GPIO_Toggle(GPIOC, 0);
-    	}
-    	if (rr_turn == 1) {
-    	    HAL_GPIO_Toggle(GPIOC, 1);
-    	}
-    	if (strb_light_en == 1) {
-    	    HAL_GPIO_Toggle(GPIOC, 15);
-    	}
-    }
+	  if (counter == 0) {
+	     if (rl_turn == 1) {
+	      	 HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_0);
+	     }
+	     if (rr_turn == 1) {
+	      	 HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_1);
+	     }
+	     if (strb_light_en == 1) {
+	      	 HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_15);
+	     }
+	  }
 
-    if (rl_turn == 0) {
-    	HAL_GPIO_Write(GPIOC, 14, rl_light_en);
-    }
-    if (rr_turn == 0) {
-    	HAL_GPIO_Write(GPIOC, 1, rr_light_en);
-    }
+	  if (rl_turn == 0) {
+	      HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, rl_light_en);
+	  }
+
+	  if (rr_turn == 0) {
+	      HAL_GPIO_WritePin(GPIOC, GPIO_PIN_1, rr_light_en);
+	  }
 
 
-    counter += 100;
-    counter = counter%500;
-    osDelay(100);
+	  counter += 100;
+	  counter = counter%500;
+	  osDelay(100);
 
   }
-  /* USER CODE END StartTask03 */
+  /* USER CODE END Lights_Control */
+}
+
+/* USER CODE BEGIN Header_Read_Sensors */
+/**
+* @brief Function implementing the ReadSensors thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_Read_Sensors */
+void Read_Sensors(void *argument)
+{
+  /* USER CODE BEGIN Read_Sensors */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1);
+  }
+  /* USER CODE END Read_Sensors */
 }
 
 /**

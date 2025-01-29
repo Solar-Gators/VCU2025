@@ -9,6 +9,10 @@ RM := rm -rf
 
 # All of the sources participating in the build are defined here
 -include sources.mk
+-include Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/subdir.mk
+-include Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/subdir.mk
+-include Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/subdir.mk
+-include Middlewares/Third_Party/FreeRTOS/Source/subdir.mk
 -include Drivers/STM32L4xx_HAL_Driver/Src/subdir.mk
 -include Core/Startup/subdir.mk
 -include Core/Src/subdir.mk
@@ -84,8 +88,8 @@ all: main-build
 main-build: VCU2025.elf secondary-outputs
 
 # Tool invocations
-VCU2025.elf VCU2025.map: $(OBJS) $(USER_OBJS) C:\Users\samrb\STM32CubeIDE\workspace_1.16.0\VCU2025\STM32L496RGTX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-g++ -o "VCU2025.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"C:\Users\samrb\STM32CubeIDE\workspace_1.16.0\VCU2025\STM32L496RGTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="VCU2025.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -lstdc++ -lsupc++ -Wl,--end-group
+VCU2025.elf VCU2025.map: $(OBJS) $(USER_OBJS) C:\Users\vigne\STM32CubeIDE\workspace_1.16.1\VCU2025\STM32L496RGTX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-g++ -o "VCU2025.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"C:\Users\vigne\STM32CubeIDE\workspace_1.16.1\VCU2025\STM32L496RGTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="VCU2025.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -lstdc++ -lsupc++ -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 
