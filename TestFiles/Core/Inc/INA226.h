@@ -1,5 +1,5 @@
 /*
- *  INA226 Current Driver
+ *  INA226 Driver Header File
  *
  *  Bryan Gonzalez
  *
@@ -21,9 +21,10 @@ extern "C" {
 
 #define INA226_I2C_ADDR (0x40 << 1)// A0, A1 pins -> 0x40 for GND (page 18)
 	//left shift address because address is 7 bits, w/ 8th bit being R/W bit, which has to be free.
+#define INA226_MANUF_ID 0x5449
+#define INA226_DIE_ID 0x2260
 	//register map (page 22), current register is listed.
 
-	//couldn't find device id (page 22)
 
 //Registers (page 22)
 
@@ -41,7 +42,7 @@ extern "C" {
 //Struct will make it easier to pass parameters
 typedef struct{
 	I2C_HandleTypeDef *i2cHandle;
-	uint8_t i2cAddress;
+	//uint8_t i2cAddress;
 	uint16_t config;
 	uint16_t shuntVoltage;
 	uint16_t busVoltage;
@@ -50,10 +51,10 @@ typedef struct{
 	uint16_t calibration;
 }INA226_t;
 
-//INA226 pointe to struct,pointer of I2C handler
+//INA226 pointer to struct,pointer of I2C handler
 uint8_t INA226_Initialize(INA226 *dev, I2C_HandleTypeDef *i2cHandle);
 
-//Retrievee Data Functions
+//Retrieve Data Functions
 HAL_StatusTypeDef INA226_READ_CONFIG_REG(ina226 *dev);
 HAL_StatusTypeDef INA226_READ_SHUNT_VOLT_REG(ina226 *dev);
 HAL_StatusTypeDef INA226_READ_BUS_VOLT_REG(ina226 *dev);
@@ -65,13 +66,15 @@ HAL_StatusTypeDef INA226_READ_ALERT_LIMIT_REG(ina226 *dev);
 HAL_StatusTypeDef INA226_READ_MANUF_ID_REG(ina226 *dev);
 HAL_StatusTypeDef INA226_READ_DIE_ID_REG(ina226 *dev);
 
-//Low-Level Functions
-	//Parameters: struct pointer, 8-bit address to read from, 16-bit address where data is stored.
-uint8_t INA226_ReadRegister(INA226 *dev, uint8_t reg, uint16_t *data);
-	//last parameter is the amount of addresses
-uint8_t INA226_ReadRegisters(INA226 *dev, uint8_t reg, uint16_t *data, uint8_t length);
+
+//Low-Level Functions:
+
+	//Parameters: struct pointer, 8-bit address to read from, 16-bit address where data is stored.t
+HAL_StatusTypeDef INA226_ReadRegister(INA226 *dev, uint8_t reg, uint16_t *data);
+//last parameter is the amount of addresses
+HAL_StatusTypeDef INA226_ReadRegisters(INA226 *dev, uint8_t reg, uint16_t *data, uint8_t length);
 	//last 2 parameters are switched
-uint8_t INA226_WriteRegister(INA226 *dev, uint8_t reg, uint16_t *data);
+HAL_StatusTypeDef INA226_WriteRegister(INA226 *dev, uint8_t reg, uint16_t *data);
 /* Exported functions prototypes ---------------------------------------------*/
 void Error_Handler(void);
 

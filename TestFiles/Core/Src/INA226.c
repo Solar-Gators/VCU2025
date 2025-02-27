@@ -1,43 +1,16 @@
-/* USER CODE BEGIN Header */
-/**
-  ******************************************************************************
-  * @file           : main.c
-  * @brief          : Main program body
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2025 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
-/* USER CODE END Header */
+/*
+ *  INA226 Driver Source File
+ *
+ *  Creates current based on shunt and bus voltage based on calibration register.
+ *
+ *  Bryan Gonzalez
+ *
+ *
+ */
 /* Includes ------------------------------------------------------------------*/
 #include <INA226.h>
 
-/* Private includes ----------------------------------------------------------*/
-/* USER CODE BEGIN Includes */
 
-/* USER CODE END Includes */
-
-/* Private typedef -----------------------------------------------------------*/
-/* USER CODE BEGIN PTD */
-
-/* USER CODE END PTD */
-
-/* Private define ------------------------------------------------------------*/
-/* USER CODE BEGIN PD */
-
-/* USER CODE END PD */
-
-/* Private macro -------------------------------------------------------------*/
-/* USER CODE BEGIN PM */
-
-/* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
 I2C_HandleTypeDef hi2c2;
@@ -243,6 +216,80 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 
 /* USER CODE END 4 */
+
+
+uint8_t INA226_Initialize(INA226 *dev, I2C_HandleTypeDef *i2cHandle){
+	//commented out register ig I don't care what they are
+	dev->i2cHandle = i2cHandle;
+	//dev->i2cAddress;
+	//dev->config
+	dev->shuntVoltage = 0.0f;
+	dev->busVoltage = 0.0f;
+	dev->power = 0.0f;
+	dev->current = 0.0f;
+	//dev->calibration
+
+	//store # of errors to check for issues
+	uint8_t errNum = 0;
+	HAL_StatusTypeDef status;
+
+	//Check device manufacturing and DIE ID
+
+	uint16_t regData;
+
+
+	//CHECK IF CORRECT PART
+
+	status = INA226_ReadRegister(dev,INA226_READ_MANUF_ID_REG , regData);
+	//Check the possible statuses if necessary
+	errNum += (status != HAL_OK);
+
+	if(regData != INA226_MANUF_ID){
+		//leave since ID doesn't match
+		return 255;
+	}
+
+	status = INA226_ReadRegister(dev,INA226_READ_DIE_ID_REG , regData);
+	//Check the possible statuses if necessary
+	errNum += (status != HAL_OK);
+
+	if(regData != INA226_DIE_ID){
+		//leave since ID doesn't match
+		return 255;
+	}
+
+
+	//INITIALIZE NECESSARY COMPONENT REGISTERS
+
+	//Calibration Register: Sets different measuring parameters (Page 22-23)
+	  // Bit(B)15 -> reset, B11-B9 -> determines average # of samples taken, B8-6 -> Bus Voltage Conversion Time(CT)
+	  // B5-B3 -> Shunt Voltage CT, B2-B0 -> Operating Mode (probing timeframe)
+
+//  *** Prober starts off, need to enable with first 3 bits later.
+	regData = 0x0920;
+
+	status = INA226_WriteRegister(dev, INA226_CALIB_REG, regData);
+	errNum += (status != HAL_OK);
+}
+
+
+
+//Low Level Functions
+
+HAL_StatusTypeDef INA226_ReadRegister(INA226 *dev, uint8_t reg, uint16_t *data){
+	//Contains: Handler,register which is getting read, memory address size, pointer where to store data,how many bytes to read, timeout duration.
+	return HAL_I2C_Mem_Read(dev -> i2cHandle, INA226_I2C_ADDR, reg,I2C_MEMADD_SIZE_8BIT,data,1,HAL_MAX_DELAY);
+}
+
+HAL_StatusTypeDef INA226_ReadRegisters(INA226 *dev, uint8_t reg, uint16_t *data, uint8_t length){
+	//The same as rearRegister but reads multiply bytes.
+	return HAL_I2C_Mem_Read(dev -> i2cHandle, INA226_I2C_ADDR, reg,I2C_MEMADD_SIZE_8BIT,data,length,HAL_MAX_DELAY);
+}
+HAL_StatusTypeDef INA226_WriteRegister(INA226 *dev, uint8_t reg, uint16_t *data){
+	return HAL_I2C_Mem_Write(dev -> i2cHandle, INA226_I2C_ADDR, reg,I2C_MEMADD_SIZE_8BIT,data,1,HAL_MAX_DELAY);
+}
+
+
 
 /**
   * @brief  This function is executed in case of error occurrence.
