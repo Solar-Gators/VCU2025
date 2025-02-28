@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "INA226.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -43,6 +44,7 @@
 I2C_HandleTypeDef hi2c2;
 
 /* USER CODE BEGIN PV */
+INA226 component;
 
 /* USER CODE END PV */
 
@@ -76,6 +78,7 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
+INA226_Initialize& component, &hi2c2, 10, 20);
 
   /* USER CODE END Init */
 

@@ -77,6 +77,9 @@ HAL_StatusTypeDef INA226_ReadRegister(INA226 *dev, uint8_t reg, uint16_t *data);
 HAL_StatusTypeDef INA226_ReadRegisters(INA226 *dev, uint8_t reg, uint16_t *data, uint8_t length);
 	//last 2 parameters are switched
 HAL_StatusTypeDef INA226_WriteRegister(INA226 *dev, uint8_t reg, uint16_t *data);
+
+uint16_t getCurrentAmp(INA226 *dev);
+
 /* Exported functions prototypes ---------------------------------------------*/
 void Error_Handler(void);
 

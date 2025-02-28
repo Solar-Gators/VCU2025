@@ -349,6 +349,16 @@ HAL_StatusTypeDef INA226_READ_ALERT_LIMIT_REG(ina226 *dev){
 //HAL_StatusTypeDef INA226_READ_MANUF_ID_REG(ina226 *dev);
 //HAL_StatusTypeDef INA226_READ_DIE_ID_REG(ina226 *dev);
 
+// return current value after multiplication
+uint16_t getCurrentAmp(INA226 *dev){
+	HAL_StatusTypeDef status;
+	uint16_t regData;
+	uint16_t currentData;
+	status = INA226_ReadRegister(dev,INA226_CALIB_REG , regData);
+	currentData = regData * dev->current_LSB;
+	return currentData;
+}
+
 
 
 /**

@@ -19,6 +19,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "cmsis_os.h"
+#include "INA226.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -616,6 +617,12 @@ void Read_Sensors(void *argument)
   /* Infinite loop */
   for(;;)
   {
+	 INA226 component;
+	 INA226_Initialize(&component, &hi2c2, 10, 20);
+
+	 component->current = getCurrentAmp(component);
+	 cout << component ->current << endl;
+
     osDelay(1);
   }
   /* USER CODE END Read_Sensors */
