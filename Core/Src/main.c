@@ -42,10 +42,11 @@
 
 /* Private variables ---------------------------------------------------------*/
 CAN_HandleTypeDef hcan1;
+CAN_HandleTypeDef hcan2;
 
 DAC_HandleTypeDef hdac1;
 
-I2C_HandleTypeDef hi2c1;
+I2C_HandleTypeDef hi2c2;
 
 /* Definitions for HeartBeat */
 osThreadId_t HeartBeatHandle;
@@ -84,7 +85,8 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_DAC1_Init(void);
 static void MX_CAN1_Init(void);
-static void MX_I2C1_Init(void);
+static void MX_CAN2_Init(void);
+static void MX_I2C2_Init(void);
 void Heart_Beat(void *argument);
 void Update_Throttle(void *argument);
 void Lights_Control(void *argument);
@@ -142,9 +144,15 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
     // Example: Check the received ID
     if (RxData[0] == 0) {
         // Process the received data in RxData
-
-    	throttle = (uint16_t)RxData[1]<<8 | RxData[2];
-
+    	uint16_t cc = RxData[6]<<8 | RxData[5];
+    	if (cc != 0)
+    	{
+    		throttle = cc;
+    	}
+    	else
+    	{
+    		throttle = (uint16_t)RxData[2]<<8 | RxData[1];
+    	}
     }
 }
 
@@ -167,10 +175,7 @@ int main(void)
 	TxHeader.RTR = CAN_RTR_DATA;
 	TxHeader.DLC = 2;
 
-	if (HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK)
-	{
-		  Error_Handler();
-	}
+
 
   /* USER CODE END 1 */
 
@@ -181,6 +186,8 @@ int main(void)
 
   /* USER CODE BEGIN Init */
   hdac1.State = HAL_DAC_STATE_RESET;
+
+
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -194,10 +201,33 @@ int main(void)
   MX_GPIO_Init();
   MX_DAC1_Init();
   MX_CAN1_Init();
-  MX_I2C1_Init();
+  MX_CAN2_Init();
+  MX_I2C2_Init();
   /* USER CODE BEGIN 2 */
   HAL_DAC_Start(&hdac1,DAC_CHANNEL_1); //Start DAC 1 and 2
   HAL_DAC_Start(&hdac1,DAC_CHANNEL_2);
+
+  HAL_CAN_Start(&hcan1);
+
+	if (HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK)
+	{
+		  Error_Handler();
+	}
+
+	CAN_FilterTypeDef canfilterconfig;
+
+  canfilterconfig.FilterActivation = CAN_FILTER_ENABLE;
+//  canfilterconfig.FilterBank = 18;  // which filter bank to use from the assigned ones
+//  canfilterconfig.FilterFIFOAssignment = CAN_FILTER_FIFO0;
+//  canfilterconfig.FilterIdHigh = 0x446<<5;
+//  canfilterconfig.FilterIdLow = 0;
+//  canfilterconfig.FilterMaskIdHigh = 0x446<<5;
+//  canfilterconfig.FilterMaskIdLow = 0x0000;
+//  canfilterconfig.FilterMode = CAN_FILTERMODE_IDMASK;
+//  canfilterconfig.FilterScale = CAN_FILTERSCALE_32BIT;
+//  canfilterconfig.SlaveStartFilterBank = 20;  // how many filters to assign to the CAN1 (master can)
+
+	  HAL_CAN_ConfigFilter(&hcan1, &canfilterconfig);
   /* USER CODE END 2 */
 
   /* Init scheduler */
@@ -338,6 +368,43 @@ static void MX_CAN1_Init(void)
 }
 
 /**
+  * @brief CAN2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_CAN2_Init(void)
+{
+
+  /* USER CODE BEGIN CAN2_Init 0 */
+
+  /* USER CODE END CAN2_Init 0 */
+
+  /* USER CODE BEGIN CAN2_Init 1 */
+
+  /* USER CODE END CAN2_Init 1 */
+  hcan2.Instance = CAN2;
+  hcan2.Init.Prescaler = 2;
+  hcan2.Init.Mode = CAN_MODE_NORMAL;
+  hcan2.Init.SyncJumpWidth = CAN_SJW_1TQ;
+  hcan2.Init.TimeSeg1 = CAN_BS1_2TQ;
+  hcan2.Init.TimeSeg2 = CAN_BS2_1TQ;
+  hcan2.Init.TimeTriggeredMode = DISABLE;
+  hcan2.Init.AutoBusOff = DISABLE;
+  hcan2.Init.AutoWakeUp = DISABLE;
+  hcan2.Init.AutoRetransmission = DISABLE;
+  hcan2.Init.ReceiveFifoLocked = DISABLE;
+  hcan2.Init.TransmitFifoPriority = DISABLE;
+  if (HAL_CAN_Init(&hcan2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN CAN2_Init 2 */
+
+  /* USER CODE END CAN2_Init 2 */
+
+}
+
+/**
   * @brief DAC1 Initialization Function
   * @param None
   * @retval None
@@ -388,50 +455,50 @@ static void MX_DAC1_Init(void)
 }
 
 /**
-  * @brief I2C1 Initialization Function
+  * @brief I2C2 Initialization Function
   * @param None
   * @retval None
   */
-static void MX_I2C1_Init(void)
+static void MX_I2C2_Init(void)
 {
 
-  /* USER CODE BEGIN I2C1_Init 0 */
+  /* USER CODE BEGIN I2C2_Init 0 */
 
-  /* USER CODE END I2C1_Init 0 */
+  /* USER CODE END I2C2_Init 0 */
 
-  /* USER CODE BEGIN I2C1_Init 1 */
+  /* USER CODE BEGIN I2C2_Init 1 */
 
-  /* USER CODE END I2C1_Init 1 */
-  hi2c1.Instance = I2C1;
-  hi2c1.Init.Timing = 0x00100D14;
-  hi2c1.Init.OwnAddress1 = 0;
-  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
-  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
-  hi2c1.Init.OwnAddress2 = 0;
-  hi2c1.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
-  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
-  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
-  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
+  /* USER CODE END I2C2_Init 1 */
+  hi2c2.Instance = I2C2;
+  hi2c2.Init.Timing = 0x00100D14;
+  hi2c2.Init.OwnAddress1 = 0;
+  hi2c2.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c2.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c2.Init.OwnAddress2 = 0;
+  hi2c2.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
+  hi2c2.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c2.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c2) != HAL_OK)
   {
     Error_Handler();
   }
 
   /** Configure Analogue filter
   */
-  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c1, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
+  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c2, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
   {
     Error_Handler();
   }
 
   /** Configure Digital filter
   */
-  if (HAL_I2CEx_ConfigDigitalFilter(&hi2c1, 0) != HAL_OK)
+  if (HAL_I2CEx_ConfigDigitalFilter(&hi2c2, 0) != HAL_OK)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN I2C1_Init 2 */
+  /* USER CODE BEGIN I2C2_Init 2 */
 
-  /* USER CODE END I2C1_Init 2 */
+  /* USER CODE END I2C2_Init 2 */
 
 }
 
@@ -485,14 +552,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : PB10 PB11 */
-  GPIO_InitStruct.Pin = GPIO_PIN_10|GPIO_PIN_11;
-  GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-  GPIO_InitStruct.Alternate = GPIO_AF4_I2C2;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
