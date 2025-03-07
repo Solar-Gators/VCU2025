@@ -1,4 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<session version="1.0">
-<refactoring comment="Delete resource &apos;VCU_INTRO&apos;" deleteContents="false" description="Delete resource &apos;VCU_INTRO&apos;" element1="/VCU_INTRO" flags="7" id="org.eclipse.ltk.core.refactoring.delete.resources" resources="1" stamp="1740685830405"/>
-</session>
