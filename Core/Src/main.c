@@ -22,7 +22,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "stdbool.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -42,10 +42,9 @@
 
 /* Private variables ---------------------------------------------------------*/
 CAN_HandleTypeDef hcan1;
+CAN_HandleTypeDef hcan2;
 
 DAC_HandleTypeDef hdac1;
-
-I2C_HandleTypeDef hi2c1;
 
 /* Definitions for HeartBeat */
 osThreadId_t HeartBeatHandle;
@@ -84,7 +83,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_DAC1_Init(void);
 static void MX_CAN1_Init(void);
-static void MX_I2C1_Init(void);
+static void MX_CAN2_Init(void);
 void Heart_Beat(void *argument);
 void Update_Throttle(void *argument);
 void Lights_Control(void *argument);
@@ -100,8 +99,24 @@ void Read_Sensors(void *argument);
 uint16_t throttle;
 uint16_t regen;
 //MC GPIO outputs
-GPIO_PinState mc_main_ctrl;
-GPIO_PinState mc_pwreco_ctrl;
+bool brakes_active;
+bool blinkers_active;
+bool left_turn_active;
+bool right_turn_active;
+
+
+bool dirrection;
+bool mc_main_ctrl;
+bool array;
+bool array_precharge;
+bool mc_pwreco_ctrl;
+
+int signal_counter;
+
+
+
+//GPIO_PinState mc_main_ctrl;
+//GPIO_PinState mc_pwreco_ctrl;
 GPIO_PinState mc_fwdrev_ctrl;
 GPIO_PinState rc_light_en;
 GPIO_PinState rr_light_en;
@@ -117,7 +132,15 @@ uint8_t rl_turn;
 uint8_t rr_turn;
 uint8_t strb_light_en;
 
+
+
+CAN_TxHeaderTypeDef TxHeader;
+uint8_t TxData[8];
+uint32_t TxMailbox;
+
 CAN_RxHeaderTypeDef RxHeader;
+
+uint8_t datacheck = 0;
 uint8_t RxData[8];  // Array to store the received data
 
 //CAN transmission
@@ -129,24 +152,89 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_PIN)
 	}
 }
 
-void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
+// Can reception
+void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan1)
 {
+  if (HAL_CAN_GetRxMessage(hcan1, CAN_RX_FIFO0, &RxHeader, RxData) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (RxHeader.StdId == 0x000)
+  {
+	  if (RxData[0] == 0) {
+		throttle = (uint16_t)RxData[2]<<8 | RxData[1];
+	  }
+  }
+  if (RxHeader.StdId == 0x7FF){
+	  if(RxData[0] == 1){
+		  //byte 1
+		  //ignition switch
+		  if((RxData[1] & 0x80) != 0x00){
+			  //preform shut down sequence
+		  }
 
-    // Retrieve the received message from FIFO 0
-    if (HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &RxHeader, RxData) != HAL_OK) {
-        // Error handling
-        Error_Handler();
-    }
+		  if((RxData[1] & 0x40) != 0x00){
+			  brakes_active = true; // turn brakes on
+		  }else{
+			  brakes_active = false; // turn breaks off
+		  }
 
-    // Process the received data
-    // Example: Check the received ID
-    if (RxData[0] == 0) {
-        // Process the received data in RxData
+		  if((RxData[1] & 0x20) != 0x00){
+			  dirrection = true; //Forward
+		  }else{
+			  dirrection = false;
+		  }
 
-    	throttle = (uint16_t)RxData[1]<<8 | RxData[2];
+		  if((RxData[1] & 0x10) != 0x00){
+			  mc_main_ctrl = true;
+		  }else{
+			  mc_main_ctrl = false;
+		  }
 
-    }
+		  if((RxData[1] & 0x08) != 0x00){
+			  array = true;
+		  }else{
+			  array = false;
+		  }
+
+		  if((RxData[1] & 0x04) != 0x00){
+			  array_precharge = true;
+		  }else{
+			  array_precharge = false;
+		  }
+
+
+		  //byte #2
+		  if((RxData[2] & 0x80) != 0x00){
+			  blinkers_active = true; // turn brakes on
+			  signal_counter = 0;
+		  }else{
+			  blinkers_active = false; // turn breaks off
+		  }
+
+		  if((RxData[2] & 0x40) != 0x00){
+			  left_turn_active = true; // turn brakes on
+			  signal_counter = 0;
+
+		  }else{
+			  left_turn_active = false; // turn breaks off
+		  }
+
+		  if((RxData[2] & 0x20) != 0x00){
+			  right_turn_active = true; //Forward
+			  signal_counter = 0;
+		  }else{
+			  right_turn_active = false;
+		  }
+
+
+	  }
+  }
 }
+
+
+
+
 
 /* USER CODE END 0 */
 
@@ -158,19 +246,19 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-	CAN_TxHeaderTypeDef TxHeader;
-	uint8_t TxData[8];
-	uint32_t TxMailbox;
 
-	TxHeader.IDE = CAN_ID_STD;
-	TxHeader.StdId = 0x446;
-	TxHeader.RTR = CAN_RTR_DATA;
-	TxHeader.DLC = 2;
+  brakes_active = false;
+  blinkers_active = false;
+  left_turn_active = false;
+  right_turn_active = false;
 
-	if (HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK)
-	{
-		  Error_Handler();
-	}
+
+  dirrection = false;
+  mc_pwreco_ctrl = false;
+  mc_main_ctrl = false;
+  array = false;
+  array_precharge = false;
+
 
   /* USER CODE END 1 */
 
@@ -180,7 +268,7 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-  hdac1.State = HAL_DAC_STATE_RESET;
+
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -194,10 +282,21 @@ int main(void)
   MX_GPIO_Init();
   MX_DAC1_Init();
   MX_CAN1_Init();
-  MX_I2C1_Init();
+  MX_CAN2_Init();
   /* USER CODE BEGIN 2 */
-  HAL_DAC_Start(&hdac1,DAC_CHANNEL_1); //Start DAC 1 and 2
-  HAL_DAC_Start(&hdac1,DAC_CHANNEL_2);
+  HAL_CAN_Start(&hcan1);
+  if (HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK)
+  {
+	  Error_Handler();
+  }
+
+
+
+  //hdac1.State = HAL_DAC_STATE_RESET;
+  TxHeader.IDE = CAN_ID_STD;
+  TxHeader.StdId = 0x446;
+  TxHeader.RTR = CAN_RTR_DATA;
+  TxHeader.DLC = 2;
   /* USER CODE END 2 */
 
   /* Init scheduler */
@@ -332,8 +431,58 @@ static void MX_CAN1_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN CAN1_Init 2 */
+  CAN_FilterTypeDef canfilterconfig;
 
+	canfilterconfig.FilterActivation = CAN_FILTER_ENABLE;
+	canfilterconfig.FilterBank = 18;  // which filter bank to use from the assigned ones
+	canfilterconfig.FilterFIFOAssignment = CAN_FILTER_FIFO0;
+	canfilterconfig.FilterIdHigh = 0x000<<5;
+	canfilterconfig.FilterIdLow = 0;
+	canfilterconfig.FilterMaskIdHigh = 0x000<<5;
+	canfilterconfig.FilterMaskIdLow = 0x0000;
+	canfilterconfig.FilterMode = CAN_FILTERMODE_IDMASK;
+	canfilterconfig.FilterScale = CAN_FILTERSCALE_32BIT;
+	canfilterconfig.SlaveStartFilterBank = 20;  // how many filters to assign to the CAN1 (master can)
+
+	HAL_CAN_ConfigFilter(&hcan1, &canfilterconfig);
   /* USER CODE END CAN1_Init 2 */
+
+}
+
+/**
+  * @brief CAN2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_CAN2_Init(void)
+{
+
+  /* USER CODE BEGIN CAN2_Init 0 */
+
+  /* USER CODE END CAN2_Init 0 */
+
+  /* USER CODE BEGIN CAN2_Init 1 */
+
+  /* USER CODE END CAN2_Init 1 */
+  hcan2.Instance = CAN2;
+  hcan2.Init.Prescaler = 2;
+  hcan2.Init.Mode = CAN_MODE_NORMAL;
+  hcan2.Init.SyncJumpWidth = CAN_SJW_1TQ;
+  hcan2.Init.TimeSeg1 = CAN_BS1_2TQ;
+  hcan2.Init.TimeSeg2 = CAN_BS2_1TQ;
+  hcan2.Init.TimeTriggeredMode = DISABLE;
+  hcan2.Init.AutoBusOff = DISABLE;
+  hcan2.Init.AutoWakeUp = DISABLE;
+  hcan2.Init.AutoRetransmission = DISABLE;
+  hcan2.Init.ReceiveFifoLocked = DISABLE;
+  hcan2.Init.TransmitFifoPriority = DISABLE;
+  if (HAL_CAN_Init(&hcan2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN CAN2_Init 2 */
+
+  /* USER CODE END CAN2_Init 2 */
 
 }
 
@@ -384,54 +533,6 @@ static void MX_DAC1_Init(void)
   /* USER CODE BEGIN DAC1_Init 2 */
 
   /* USER CODE END DAC1_Init 2 */
-
-}
-
-/**
-  * @brief I2C1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_I2C1_Init(void)
-{
-
-  /* USER CODE BEGIN I2C1_Init 0 */
-
-  /* USER CODE END I2C1_Init 0 */
-
-  /* USER CODE BEGIN I2C1_Init 1 */
-
-  /* USER CODE END I2C1_Init 1 */
-  hi2c1.Instance = I2C1;
-  hi2c1.Init.Timing = 0x00100D14;
-  hi2c1.Init.OwnAddress1 = 0;
-  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
-  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
-  hi2c1.Init.OwnAddress2 = 0;
-  hi2c1.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
-  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
-  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
-  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /** Configure Analogue filter
-  */
-  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c1, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /** Configure Digital filter
-  */
-  if (HAL_I2CEx_ConfigDigitalFilter(&hi2c1, 0) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN I2C1_Init 2 */
-
-  /* USER CODE END I2C1_Init 2 */
 
 }
 
@@ -487,14 +588,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PB10 PB11 */
-  GPIO_InitStruct.Pin = GPIO_PIN_10|GPIO_PIN_11;
-  GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-  GPIO_InitStruct.Alternate = GPIO_AF4_I2C2;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
 }
@@ -537,6 +630,17 @@ void Heart_Beat(void *argument)
 void Update_Throttle(void *argument)
 {
   /* USER CODE BEGIN Update_Throttle */
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_2, SET);
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_2, SET);
+
+
+
+  HAL_DAC_Start(&hdac1,DAC_CHANNEL_1); //Start DAC 1 and 2
+  HAL_DAC_Start(&hdac1,DAC_CHANNEL_2);
+  array = 1;
+  array_precharge = 1;
+
+
   /* Infinite loop */
   for(;;)
   {
@@ -544,13 +648,44 @@ void Update_Throttle(void *argument)
 	  HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, regen);
 
 	  //updates gpio pins with states from global variables
-	  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0, mc_main_ctrl);
-	  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, mc_pwreco_ctrl);
-	  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, mc_fwdrev_ctrl);
-	  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, fan_en);
-	  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, horn_en);
-	  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_2, mppt_pre_contactor_en);
-	  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_3, mppt_contactor_en);
+
+	  //change for bistable relay
+	  //gonna have to think about this section
+	  if(mc_main_ctrl){
+		  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0, GPIO_PIN_SET);
+	  }else{
+		  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0, GPIO_PIN_RESET);
+	  }
+
+	  if(mc_pwreco_ctrl){
+		  //closed power
+		  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_SET);
+	  }else{
+		  //open eco
+		  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_RESET);
+	  }
+
+
+	  if(dirrection == true){
+		  //closed forward
+		  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, SET);
+	  }else{
+		  //open backward
+		  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, RESET);
+	  }
+
+	  if(array_precharge == true){
+		  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_2, RESET);
+	  }else{
+		  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_2, SET);
+	  }
+
+	  if(array == true){
+		  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_3, RESET);
+	  }else{
+		  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_3, SET);
+	  }
+
 
 	  osDelay(20);
   }
@@ -567,38 +702,60 @@ void Update_Throttle(void *argument)
 void Lights_Control(void *argument)
 {
   /* USER CODE BEGIN Lights_Control */
-  int counter = 0;
+  left_turn_active = true;
 
   /* Infinite loop */
   for(;;)
   {
+
+
+	  if(left_turn_active){
+		  if(signal_counter < 5){
+			  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, SET);
+		  }else{
+			  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, RESET);
+		  }
+		  signal_counter++;
+
+	  }else{
+		  if(brakes_active){
+			  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, SET);
+		  }
+		  else{
+			  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, RESET);
+		  }
+	  }
+
+	  if(right_turn_active){
+		  if(signal_counter < 5){
+			  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0, SET);
+		  }else{
+			  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0, RESET);
+		  }
+		  signal_counter++;
+
+	  }else{
+		  if(brakes_active){
+			  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0, SET);
+		  }
+		  else{
+			  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0, RESET);
+		  }
+	  }
+
 	  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0, rc_light_en); //sets center rear light (brake light)
 
-	  if (counter == 0) {
-	     if (rl_turn == 1) {
-	      	 HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_0);
-	     }
-	     if (rr_turn == 1) {
-	      	 HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_1);
-	     }
-	     if (strb_light_en == 1) {
-	      	 HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_15);
-	     }
-	  }
-
-	  if (rl_turn == 0) {
-	      HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, rl_light_en);
-	  }
-
-	  if (rr_turn == 0) {
-	      HAL_GPIO_WritePin(GPIOC, GPIO_PIN_1, rr_light_en);
-	  }
+	  signal_counter = signal_counter%10;
 
 
-	  counter += 100;
-	  counter = counter%500;
+
+
+
+
+
+
+
 	  osDelay(100);
-
   }
   /* USER CODE END Lights_Control */
 }
@@ -612,10 +769,14 @@ void Lights_Control(void *argument)
 /* USER CODE END Header_Read_Sensors */
 void Read_Sensors(void *argument)
 {
+
   /* USER CODE BEGIN Read_Sensors */
+
   /* Infinite loop */
   for(;;)
   {
+
+
     osDelay(1);
   }
   /* USER CODE END Read_Sensors */
@@ -623,7 +784,7 @@ void Read_Sensors(void *argument)
 
 /**
   * @brief  Period elapsed callback in non blocking mode
-  * @note   This function is called  when TIM3 interrupt took place, inside
+  * @note   This function is called  when TIM6 interrupt took place, inside
   * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
   * a global variable "uwTick" used as application time base.
   * @param  htim : TIM handle
@@ -634,7 +795,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   /* USER CODE BEGIN Callback 0 */
 
   /* USER CODE END Callback 0 */
-  if (htim->Instance == TIM3) {
+  if (htim->Instance == TIM6) {
     HAL_IncTick();
   }
   /* USER CODE BEGIN Callback 1 */
