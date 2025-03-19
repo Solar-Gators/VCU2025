@@ -1,19 +1,19 @@
 /*
  *  INA226 Driver Source File
  *
- *  Creates current based on shunt and bus voltage based on calibration register.
+ *  Calculate current and power based on bus/shunt voltages. Calculate Calibration
+ *  register value and current_LSB, both of which are used to find current and power.
+ *  Use current_LSB to recalculate register value is Amperes or Watss respectively.
  *
  *  Bryan Gonzalez
- *
- *
  */
 /* Includes ------------------------------------------------------------------*/
 #include <INA226.h>
 #include <stdio.h>
 #include <math.h>
 
+//Initialize INA226 Component using max current expected and resistance of shunt resistor.
 HAL_StatusTypeDef  INA226_Initialize(INA226_t *dev, I2C_HandleTypeDef *i2cHandle, float maxCurrent, float shuntResistance ){
-	//commented out register ig I don't care what they are
 	dev->i2cHandle = i2cHandle;
 	dev->config = 0;
 	dev->shuntVoltage = 0; //max is 81.92mV
@@ -30,19 +30,15 @@ HAL_StatusTypeDef  INA226_Initialize(INA226_t *dev, I2C_HandleTypeDef *i2cHandle
 	uint8_t errNum = 0;
 	HAL_StatusTypeDef status;
 
-	//Check device manufacturing and DIE ID
-
-	//adjust if reading multiple registers, don't think we will need to.
 	uint16_t regData;
-	//float CAL;
+	//float CAL, we are truncating for register so it doesn't matter.
 	uint16_t CAL;
 
 
-	//CHECK IF CORRECT PART
+	//Check device manufacturing and DIE ID
+
 
 	status = INA226_ReadRegister(dev,INA226_MANUF_ID_REG , &regData);
-	//Check the possible statuses if necessary
-	errNum += (status != HAL_OK);
 
 	if(regData != INA226_MANUF_ID){
 		//leave since ID doesn't match
@@ -50,8 +46,6 @@ HAL_StatusTypeDef  INA226_Initialize(INA226_t *dev, I2C_HandleTypeDef *i2cHandle
 	}
 
 	status = INA226_ReadRegister(dev,INA226_DIE_ID_REG, &regData);
-	//Check the possible statuses if necessary
-	errNum += (status != HAL_OK);
 
 	if(regData != INA226_DIE_ID){
 		//leave since ID doesn't match
@@ -103,42 +97,16 @@ HAL_StatusTypeDef INA226_ReadRegister(INA226_t *dev, uint8_t reg, uint16_t *data
     return status;
 }
 
-//Don't need rn
-/*
-HAL_StatusTypeDef INA226_ReadRegisters(INA226_t *dev, uint8_t reg, uint8_t* data, uint8_t length){
-    // The same as ReadRegister but reads multiple bytes (2 bytes per register)
-
-	uint8_t temp[length * 2];
-
-	HAL_StatusTypeDef status;
-	//how should I store the status?
-    status = HAL_I2C_Mem_Read(dev->i2cHandle, INA226_I2C_ADDR, reg, I2C_MEMADD_SIZE_8BIT,temp, 2, HAL_MAX_DELAY);
-    uint16_t alldata;
-
-    for (int i = 0; i < length; i ++){
-		//temp is full rn
-
-		//MAKE SURE INDEXING CORRECTLY
-		alldata = (uint16_t)temp[0];
-		//shift regdata left 8 so # is xxxxxxxx00000000
-		alldata = (alldata << 8);
-		alldata = alldata | (uint16_t)temp[1];
-		data = alldata;
-		return status;
-    }
-}
-*/
-
 HAL_StatusTypeDef INA226_WriteRegister(INA226_t *dev, uint8_t reg, uint16_t *data){
     // Write 2 bytes (16 bits) to the specified register
-	uint16_t sliceData = *data;
+	uint16_t passData = ((*data >> 8) | (*data << 8));
 	HAL_StatusTypeDef status;
-	uint8_t passData = (uint16_t)sliceData;
 
-    status = HAL_I2C_Mem_Write(dev->i2cHandle, INA226_I2C_ADDR, reg, I2C_MEMADD_SIZE_8BIT, &passData, 2, HAL_MAX_DELAY);
 
-    passData = (sliceData >> 2) & 0xFF;
-    status = HAL_I2C_Mem_Write(dev->i2cHandle, INA226_I2C_ADDR, reg, I2C_MEMADD_SIZE_8BIT, &passData, 2, HAL_MAX_DELAY);
+
+	//Pass in a pointer to the 16 bit # as an 8 bit pointer, but use length 2 to write 2 bits.
+    status = HAL_I2C_Mem_Write(dev->i2cHandle, INA226_I2C_ADDR, (uint16_t)reg, I2C_MEMADD_SIZE_8BIT, (uint8_t*)&passData, 2, HAL_MAX_DELAY);
+
 }
 
 // return current value after multiplication
@@ -148,6 +116,15 @@ uint16_t getCurrentAmp(INA226_t *dev){
 	INA226_ReadRegister(dev, INA226_CURRENT_REG, regData);
 	currentData = regData * dev->current_LSB;
 	return currentData;
+}
+
+// return power value after multiplication
+uint16_t getPowerWatt(INA226_t *dev){
+	uint8_t regData;
+	uint8_t powerData;
+	INA226_ReadRegister(dev, INA226_POWER_REG,regData);
+	powerData = regData * dev->current_LSB;
+	return powerData;
 }
 
 #ifdef  USE_FULL_ASSERT

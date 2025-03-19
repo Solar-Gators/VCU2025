@@ -102,7 +102,6 @@ int main(void)
   {
     /* USER CODE END WHILE */
 	  	 component.current = getCurrentAmp(&component);
-	  	 //printf("%d\n", component.current);
 
     /* USER CODE BEGIN 3 */
   }

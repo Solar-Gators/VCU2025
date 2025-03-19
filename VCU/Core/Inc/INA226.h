@@ -6,7 +6,6 @@
  *
  */
 
-// these are include guards, prevents code from being defined again.
 #ifndef INA226_I2C_DRIVER_H
 #define INA226_I2C_DRIVER_H
 
@@ -39,10 +38,8 @@ extern "C" {
 #define INA226_MANUF_ID_REG 0xFE
 #define INA226_DIE_ID_REG 0xFF
 
-//Struct will make it easier to pass parameters
 typedef struct{
 	I2C_HandleTypeDef *i2cHandle;
-	//uint8_t i2cAddress;
 	float current_LSB;
 	float rShunt;
 	uint16_t config;
@@ -63,13 +60,13 @@ HAL_StatusTypeDef INA226_Initialize(INA226_t *dev, I2C_HandleTypeDef *i2cHandle,
 //Parameters: struct pointer, 8-bit address to read from, 16-bit where data is stored
 HAL_StatusTypeDef INA226_ReadRegister(INA226_t *dev, uint8_t reg, uint16_t *data);
 
-//last parameter is the amount of addresses
-//HAL_StatusTypeDef INA226_ReadRegisters(INA226_t *dev, uint8_t reg, uint16_t* data, uint8_t length);
-
 //last 2 parameters are switched
 HAL_StatusTypeDef INA226_WriteRegister(INA226_t *dev, uint8_t reg, uint16_t *data);
 
+
+//High-Level Functions:
 uint16_t getCurrentAmp(INA226_t *dev);
+uint16_t getPowerWatt(INA226_t *dev);
 
 /* Exported functions prototypes ---------------------------------------------*/
 void Error_Handler(void);
