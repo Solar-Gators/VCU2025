@@ -19,10 +19,10 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "cmsis_os.h"
-#include "INA226.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "INA226.h"
 
 /* USER CODE END Includes */
 
@@ -33,6 +33,8 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+
+#define CHECK_BIT(var,pos) !!((var) & (1<<(pos)))
 
 /* USER CODE END PD */
 
@@ -47,6 +49,7 @@ CAN_HandleTypeDef hcan1;
 DAC_HandleTypeDef hdac1;
 
 I2C_HandleTypeDef hi2c1;
+I2C_HandleTypeDef hi2c2;
 
 /* Definitions for HeartBeat */
 osThreadId_t HeartBeatHandle;
@@ -78,6 +81,14 @@ const osThreadAttr_t ReadSensors_attributes = {
 };
 /* USER CODE BEGIN PV */
 
+//for power and current
+INA226_t INA226_IVP;
+
+//USE INTERRUPT?
+
+//Create volatile flag for reading power?
+
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -86,6 +97,7 @@ static void MX_GPIO_Init(void);
 static void MX_DAC1_Init(void);
 static void MX_CAN1_Init(void);
 static void MX_I2C1_Init(void);
+static void MX_I2C2_Init(void);
 void Heart_Beat(void *argument);
 void Update_Throttle(void *argument);
 void Lights_Control(void *argument);
@@ -173,6 +185,7 @@ int main(void)
 		  Error_Handler();
 	}
 
+
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -196,9 +209,16 @@ int main(void)
   MX_DAC1_Init();
   MX_CAN1_Init();
   MX_I2C1_Init();
+  MX_I2C2_Init();
   /* USER CODE BEGIN 2 */
   HAL_DAC_Start(&hdac1,DAC_CHANNEL_1); //Start DAC 1 and 2
   HAL_DAC_Start(&hdac1,DAC_CHANNEL_2);
+
+  //INA226 Intialize, change inputs if expect values change
+  if(INA226_Initialize(&INA226_IVP, &hi2c2, 10, 20) != HAL_OK){ Error_Handler();}
+
+  HAL_CAN_Start(&hcan1);
+
   /* USER CODE END 2 */
 
   /* Init scheduler */
@@ -231,7 +251,8 @@ int main(void)
   LightsControlHandle = osThreadNew(Lights_Control, NULL, &LightsControl_attributes);
 
   /* creation of ReadSensors */
-  ReadSensorsHandle = osThreadNew(Read_Sensors, NULL, &ReadSensors_attributes);
+  //ASK ABOUT
+  ReadSensorsHandle = osThreadNew(Read_Sensors, &INA226_IVP, &ReadSensors_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -437,6 +458,54 @@ static void MX_I2C1_Init(void)
 }
 
 /**
+  * @brief I2C2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_I2C2_Init(void)
+{
+
+  /* USER CODE BEGIN I2C2_Init 0 */
+
+  /* USER CODE END I2C2_Init 0 */
+
+  /* USER CODE BEGIN I2C2_Init 1 */
+
+  /* USER CODE END I2C2_Init 1 */
+  hi2c2.Instance = I2C2;
+  hi2c2.Init.Timing = 0x00100D14;
+  hi2c2.Init.OwnAddress1 = 0;
+  hi2c2.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c2.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c2.Init.OwnAddress2 = 0;
+  hi2c2.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
+  hi2c2.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c2.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Analogue filter
+  */
+  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c2, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Digital filter
+  */
+  if (HAL_I2CEx_ConfigDigitalFilter(&hi2c2, 0) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C2_Init 2 */
+
+  /* USER CODE END I2C2_Init 2 */
+
+}
+
+/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -444,8 +513,8 @@ static void MX_I2C1_Init(void)
 static void MX_GPIO_Init(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
-/* USER CODE BEGIN MX_GPIO_Init_1 */
-/* USER CODE END MX_GPIO_Init_1 */
+  /* USER CODE BEGIN MX_GPIO_Init_1 */
+  /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOC_CLK_ENABLE();
@@ -488,16 +557,8 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PB10 PB11 */
-  GPIO_InitStruct.Pin = GPIO_PIN_10|GPIO_PIN_11;
-  GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-  GPIO_InitStruct.Alternate = GPIO_AF4_I2C2;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
-/* USER CODE BEGIN MX_GPIO_Init_2 */
-/* USER CODE END MX_GPIO_Init_2 */
+  /* USER CODE BEGIN MX_GPIO_Init_2 */
+  /* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
@@ -614,14 +675,55 @@ void Lights_Control(void *argument)
 void Read_Sensors(void *argument)
 {
   /* USER CODE BEGIN Read_Sensors */
+
+	//Write HERE
+
+	int HAL_CAN_BUSY = 0;
+	uint64_t messages_sent = 0;
+
+	CAN_TxHeaderTypeDef TxHeader;
+	uint8_t TxData[8] = { 0 };
+	uint32_t TxMailbox = { 0 };
+
+
+	TxHeader.IDE = CAN_ID_STD; // Standard ID (not extended)
+	TxHeader.StdId = 0x0; // 11 bit Identifier
+	TxHeader.RTR = CAN_RTR_DATA; // Std RTR Data frame
+	TxHeader.DLC = 8; // 8 bytes being transmitted
+
+	//Message ID 2 for VCU
+	TxData[0] = 2;
+
+	uint8_t ina226_data[2];
+
+	HAL_CAN_AddTxMessage(&hcan1, &TxHeader, TxData, &TxMailbox);
+
   /* Infinite loop */
   for(;;)
   {
-	 INA226 component;
-	 INA226_Initialize(&component, &hi2c2, 10, 20);
+	  //INA226_t *data = (INA226_t *)argument;
+	  INA226_IVP.current = getCurrentAmp(&INA226_IVP);
+	  INA226_IVP.power = getPowerWatt(&INA226_IVP);
 
-	 component->current = getCurrentAmp(component);
-	 cout << component ->current << endl;
+	  //Store in CAN, power byte L and H
+	  ina226_data[0] = INA226_IVP.power & 0xFF;
+	  ina226_data[1] = (INA226_IVP.power >> 8) & 0xFF;
+
+	  //Assign CAN message
+	  TxData[0] = 2;
+	  TxData[1] = ina226_data[0];
+	  TxData[2] = ina226_data[1];
+
+	  while(!HAL_CAN_GetTxMailboxesFreeLevel(&hcan1));
+	  HAL_StatusTypeDef status;
+	  status = HAL_CAN_AddTxMessage(&hcan1, &TxHeader, TxData, &TxMailbox);
+	  messages_sent++;
+	  if (status == HAL_ERROR){
+		  Error_Handler();
+	  }
+	  else if(status == HAL_BUSY){
+		  HAL_CAN_BUSY++;
+	  }
 
     osDelay(1);
   }
@@ -641,7 +743,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   /* USER CODE BEGIN Callback 0 */
 
   /* USER CODE END Callback 0 */
-  if (htim->Instance == TIM3) {
+  if (htim->Instance == TIM3)
+  {
     HAL_IncTick();
   }
   /* USER CODE BEGIN Callback 1 */

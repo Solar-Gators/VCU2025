@@ -46,7 +46,7 @@ typedef struct{
 	uint16_t shuntVoltage;
 	uint16_t busVoltage;
 	uint16_t power;
-	float current;
+	uint16_t current;
 	uint16_t calibration;
 }INA226_t;
 

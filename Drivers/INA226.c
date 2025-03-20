@@ -106,23 +106,23 @@ HAL_StatusTypeDef INA226_WriteRegister(INA226_t *dev, uint8_t reg, uint16_t *dat
 
 	//Pass in a pointer to the 16 bit # as an 8 bit pointer, but use length 2 to write 2 bits.
     status = HAL_I2C_Mem_Write(dev->i2cHandle, INA226_I2C_ADDR, (uint16_t)reg, I2C_MEMADD_SIZE_8BIT, (uint8_t*)&passData, 2, HAL_MAX_DELAY);
-
+    return status;
 }
 
 // return current value after multiplication
 uint16_t getCurrentAmp(INA226_t *dev){
-	uint8_t regData;
-	uint8_t currentData;
-	INA226_ReadRegister(dev, INA226_CURRENT_REG, regData);
+	uint16_t regData;
+	uint16_t currentData;
+	INA226_ReadRegister(dev, INA226_CURRENT_REG, &regData);
 	currentData = regData * dev->current_LSB;
 	return currentData;
 }
 
 // return power value after multiplication
 uint16_t getPowerWatt(INA226_t *dev){
-	uint8_t regData;
-	uint8_t powerData;
-	INA226_ReadRegister(dev, INA226_POWER_REG,regData);
+	uint16_t regData;
+	uint16_t powerData;
+	INA226_ReadRegister(dev, INA226_POWER_REG,&regData);
 	powerData = regData * dev->current_LSB;
 	return powerData;
 }
