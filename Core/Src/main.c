@@ -588,12 +588,22 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
+
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
-
+// GPIO Expander Interrupt Handler
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+	if(GPIO_Pin == GPIO_PIN_13){
+		//kill switch sequence
+	}
+}
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_Heart_Beat */
@@ -769,7 +779,6 @@ void Lights_Control(void *argument)
 /* USER CODE END Header_Read_Sensors */
 void Read_Sensors(void *argument)
 {
-
   /* USER CODE BEGIN Read_Sensors */
 
   /* Infinite loop */
