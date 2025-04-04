@@ -23,6 +23,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "stdbool.h"
+#include "INA226.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -45,6 +46,8 @@ CAN_HandleTypeDef hcan1;
 CAN_HandleTypeDef hcan2;
 
 DAC_HandleTypeDef hdac1;
+
+I2C_HandleTypeDef hi2c2;
 
 /* Definitions for HeartBeat */
 osThreadId_t HeartBeatHandle;
@@ -84,6 +87,7 @@ static void MX_GPIO_Init(void);
 static void MX_DAC1_Init(void);
 static void MX_CAN1_Init(void);
 static void MX_CAN2_Init(void);
+static void MX_I2C2_Init(void);
 void Heart_Beat(void *argument);
 void Update_Throttle(void *argument);
 void Lights_Control(void *argument);
@@ -132,6 +136,24 @@ uint8_t rl_turn;
 uint8_t rr_turn;
 uint8_t strb_light_en;
 
+//current sensor
+uint8_t currentSenseAddress = 0x44;
+uint8_t imuAddress = 0x68;
+float power;
+uint16_t powerInteger;
+uint8_t powerLSB;
+uint8_t powerMSB;
+
+//IMU
+uint8_t imuAddress = 0x68;
+uint16_t accelInteger;
+uint8_t acceLSB;
+uint8_t accelMSB;
+uint16_t velocityInteger;
+uint8_t velocityLSB;
+uint8_t velocityMSB;
+
+
 
 
 CAN_TxHeaderTypeDef TxHeader;
@@ -148,7 +170,8 @@ uint8_t RxData[8];  // Array to store the received data
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_PIN)
 {
 	if (GPIO_PIN == GPIO_PIN_13) {
-
+		kill_sw = 0;
+		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, kill_sw);
 	}
 }
 
@@ -170,6 +193,8 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan1)
 		  //byte 1
 		  //ignition switch
 		  if((RxData[1] & 0x80) != 0x00){
+			  mppt_pre_contactor_en = false;
+			  mppt_contactor_en = false;
 			  //preform shut down sequence
 		  }
 
@@ -283,6 +308,7 @@ int main(void)
   MX_DAC1_Init();
   MX_CAN1_Init();
   MX_CAN2_Init();
+  MX_I2C2_Init();
   /* USER CODE BEGIN 2 */
   HAL_CAN_Start(&hcan1);
   if (HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK)
@@ -537,6 +563,54 @@ static void MX_DAC1_Init(void)
 }
 
 /**
+  * @brief I2C2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_I2C2_Init(void)
+{
+
+  /* USER CODE BEGIN I2C2_Init 0 */
+
+  /* USER CODE END I2C2_Init 0 */
+
+  /* USER CODE BEGIN I2C2_Init 1 */
+
+  /* USER CODE END I2C2_Init 1 */
+  hi2c2.Instance = I2C2;
+  hi2c2.Init.Timing = 0x00100D14;
+  hi2c2.Init.OwnAddress1 = 0;
+  hi2c2.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c2.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c2.Init.OwnAddress2 = 0;
+  hi2c2.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
+  hi2c2.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c2.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Analogue filter
+  */
+  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c2, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Digital filter
+  */
+  if (HAL_I2CEx_ConfigDigitalFilter(&hi2c2, 0) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C2_Init 2 */
+
+  /* USER CODE END I2C2_Init 2 */
+
+}
+
+/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -601,7 +675,7 @@ static void MX_GPIO_Init(void)
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
 	if(GPIO_Pin == GPIO_PIN_13){
-		//kill switch sequence
+		HAL_GPIO_WritePin(GPIOC, GPIO_Pin, GPIO_PIN_RESET);
 	}
 }
 /* USER CODE END 4 */
@@ -621,9 +695,9 @@ void Heart_Beat(void *argument)
   /* Infinite loop */
   for(;;)
   {
+	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);
 	HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_13);
     osDelay(500);
-
   }
 
 
@@ -756,15 +830,6 @@ void Lights_Control(void *argument)
 	  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0, rc_light_en); //sets center rear light (brake light)
 
 	  signal_counter = signal_counter%10;
-
-
-
-
-
-
-
-
-
 	  osDelay(100);
   }
   /* USER CODE END Lights_Control */
@@ -780,14 +845,67 @@ void Lights_Control(void *argument)
 void Read_Sensors(void *argument)
 {
   /* USER CODE BEGIN Read_Sensors */
+  INA226 currentSensor;
+  if (currentSensor.Init(hi2c2) != HAL_OK) {
+	  Error_Handler();
+  }
+
+  IMU inertialMeasurementUnit;
+  uint8_t errNum = inertialMeasurementUnit.IMU_INIT(hi2c2);
+  if (errNum != 0) {
+	  Error_Handler();
+  }
+
+
 
   /* Infinite loop */
-  for(;;)
-  {
+  for(;;){
+	//update global variables for current sense
+	if (currentSensor.getPower() != HAL_OK) {
+		Error_Handler();
+	}
 
 
-    osDelay(1);
+	power = currentSensor.Power();
+
+	powerInteger = floor(power/0.025);
+	powerLSB = (powerInteger >> 8);
+	powerMSB = (powerInteger - powerLSB) >> 8;
+
+
+	if (inertialMeasurementUnit.IMU_ReadAccel() != HAL_OK) {
+		Error_Handler();
+	}
+
+	if (inertialMeasurementUnit.IMU_ReadGyro() != HAL_OK) {
+		Error_Handler();
+	}
+
+	//update global variables for IMU
+	accelInteger = (uint16_t)floor(inertialMeasurementUnit.accelData[0]) * 65536.0/4);
+	accelLSB = (accelInteger >> 8);
+	accelMSB = (accelInteger - accelLSB) >> 8;
+
+	velocityInteger = (uint16_t)floor(inertialMeasurementUnit.gyroData[0] * 65536.0/250);
+	velocityLSB = (velocityInteger >> 8);
+	velocityMSB = (velocityInteger - velocityLSB) >> 8;
+
+	//update TxData
+	TxData[0] = 2;
+	TxData[1] = powerLSB;
+	TxData[2] = powerMSB;
+	TxData[3] = velocityLSB;
+	TxData[4] = velocityMSB;
+
+	//send CAN message
+	if (HAL_CAN_AddTxMessage(&hcan1, &TxHeader, TxData, &TxMailbox) != HAL_OK) {
+		Error_Handler();
+	}
+
   }
+
+
+
   /* USER CODE END Read_Sensors */
 }
 
