@@ -23,7 +23,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "stdbool.h"
-#include "INA226.h"
+//#include "INA226.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -145,7 +145,7 @@ uint8_t powerLSB;
 uint8_t powerMSB;
 
 //IMU
-uint8_t imuAddress = 0x68;
+//uint8_t imuAddress = 0x68;
 uint16_t accelInteger;
 uint8_t acceLSB;
 uint8_t accelMSB;
@@ -170,8 +170,8 @@ uint8_t RxData[8];  // Array to store the received data
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_PIN)
 {
 	if (GPIO_PIN == GPIO_PIN_13) {
-		kill_sw = 0;
-		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, kill_sw);
+//		kill_sw = 0;
+//		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, kill_sw);
 	}
 }
 
@@ -861,7 +861,9 @@ void Lights_Control(void *argument)
 /* USER CODE END Header_Read_Sensors */
 void Read_Sensors(void *argument)
 {
+
   /* USER CODE BEGIN Read_Sensors */
+	/*
   INA226 currentSensor;
   if (currentSensor.Init(hi2c2) != HAL_OK) {
 	  Error_Handler();
@@ -873,10 +875,12 @@ void Read_Sensors(void *argument)
 	  Error_Handler();
   }
 
-
+	*/
 
   /* Infinite loop */
+
   for(;;){
+	  /*
 	//update global variables for current sense
 	if (currentSensor.getPower() != HAL_OK) {
 		Error_Handler();
@@ -918,7 +922,8 @@ void Read_Sensors(void *argument)
 	if (HAL_CAN_AddTxMessage(&hcan1, &TxHeader, TxData, &TxMailbox) != HAL_OK) {
 		Error_Handler();
 	}
-
+	*/
+	  osDelay(100);
   }
 
 
