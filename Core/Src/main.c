@@ -232,21 +232,26 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan1)
 
 		  //byte #2
 		  if((RxData[2] & 0x01) != 0x00){
-			  blinkers_active = true;
+			  if (blinkers_active != true) {
+				  blinkers_active = true;
+				  signal_counter = 0;
+			  }
+			  blinkers_active = true; // turn brakes on
 
 		  }else{
 			  blinkers_active = false;
 		  }
 
 		  if((RxData[2] & 0x02) != 0x00){
-			  if(left_turn_active != true){
-				  left_turn_active = true; // Turn on left
-				  right_turn_active = false; // Turn off right
+			  if (left_turn_active != true) {
+				  left_turn_active = true;
 				  signal_counter = 0;
 			  }
+			  left_turn_active = true; // turn brakes on
+
 
 		  }else{
-			  left_turn_active = false;
+			  left_turn_active = false; // turn brakes off
 		  }
 
 		  if((RxData[2] & 0x04) != 0x00){
@@ -255,8 +260,7 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan1)
 				  left_turn_active = false; //Turn off left
 				  signal_counter = 0;
 			  }
-
-
+			  right_turn_active = true;
 		  }else{
 			  right_turn_active = false;
 		  }
@@ -809,7 +813,20 @@ void Lights_Control(void *argument)
   /* Infinite loop */
   for(;;)
   {
-
+	  if (blinkers_active) {
+		  if (signal_counter < 5) {
+			  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, RESET);
+			  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_1, RESET);
+		  }
+		  else {
+			  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, SET);
+			  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_1, SET);
+		  }
+		  signal_counter++;
+		  signal_counter = signal_counter%10;
+		  osDelay(100);
+		  continue;
+	  }
 
 	  if(left_turn_active){
 		  if(signal_counter < 5){
@@ -835,8 +852,8 @@ void Lights_Control(void *argument)
 			  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_1, SET);
 		  }
 		  signal_counter++;
-
-	  }else{
+	  }
+	  else{
 		  if(brakes_active){
 			  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_1, SET);
 		  }
