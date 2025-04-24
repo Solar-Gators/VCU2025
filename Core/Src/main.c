@@ -836,10 +836,10 @@ void Lights_Control(void *argument)
 
 	  }else{
 		  if(brakes_active){
-			  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, SET);
+			  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, RESET);
 		  }
 		  else{
-			  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, RESET);
+			  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, SET);
 		  }
 	  }
 
