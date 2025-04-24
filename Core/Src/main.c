@@ -23,7 +23,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "stdbool.h"
-#include "INA226.h"
+//#include "INA226.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -145,7 +145,7 @@ uint8_t powerLSB;
 uint8_t powerMSB;
 
 //IMU
-uint8_t imuAddress = 0x68;
+//uint8_t imuAddress = 0x68;
 uint16_t accelInteger;
 uint8_t acceLSB;
 uint8_t accelMSB;
@@ -170,8 +170,8 @@ uint8_t RxData[8];  // Array to store the received data
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_PIN)
 {
 	if (GPIO_PIN == GPIO_PIN_13) {
-		kill_sw = 0;
-		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, kill_sw);
+//		kill_sw = 0;
+//		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, kill_sw);
 	}
 }
 
@@ -230,24 +230,35 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan1)
 
 
 		  //byte #2
-		  if((RxData[2] & 0x80) != 0x00){
+		  if((RxData[2] & 0x01) != 0x00){
+			  if (blinkers_active != true) {
+				  blinkers_active = true;
+				  signal_counter = 0;
+			  }
 			  blinkers_active = true; // turn brakes on
-			  signal_counter = 0;
+
 		  }else{
 			  blinkers_active = false; // turn breaks off
 		  }
 
-		  if((RxData[2] & 0x40) != 0x00){
+		  if((RxData[2] & 0x02) != 0x00){
+			  if (left_turn_active != true) {
+				  left_turn_active = true;
+				  signal_counter = 0;
+			  }
 			  left_turn_active = true; // turn brakes on
-			  signal_counter = 0;
+
 
 		  }else{
-			  left_turn_active = false; // turn breaks off
+			  left_turn_active = false; // turn brakes off
 		  }
 
-		  if((RxData[2] & 0x20) != 0x00){
-			  right_turn_active = true; //Forward
-			  signal_counter = 0;
+		  if((RxData[2] & 0x04) != 0x00){
+			  if(right_turn_active != true){
+				  right_turn_active = true; //Forward
+				  signal_counter = 0;
+			  }
+			  right_turn_active = true;
 		  }else{
 			  right_turn_active = false;
 		  }
@@ -275,7 +286,7 @@ int main(void)
   brakes_active = false;
   blinkers_active = false;
   left_turn_active = false;
-  right_turn_active = false;
+  right_turn_active = true;
 
 
   dirrection = false;
@@ -311,6 +322,8 @@ int main(void)
   MX_I2C2_Init();
   /* USER CODE BEGIN 2 */
   HAL_CAN_Start(&hcan1);
+
+  //intalize can RX interupt
   if (HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK)
   {
 	  Error_Handler();
@@ -627,7 +640,8 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14|GPIO_PIN_15|GPIO_PIN_0|GPIO_PIN_1
+                          |GPIO_PIN_2|GPIO_PIN_3, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOA, MC_Main_Pin|GPIO_PIN_1|GPIO_PIN_2, GPIO_PIN_RESET);
@@ -641,8 +655,10 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PC0 PC1 PC2 PC3 */
-  GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3;
+  /*Configure GPIO pins : PC14 PC15 PC0 PC1
+                           PC2 PC3 */
+  GPIO_InitStruct.Pin = GPIO_PIN_14|GPIO_PIN_15|GPIO_PIN_0|GPIO_PIN_1
+                          |GPIO_PIN_2|GPIO_PIN_3;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -667,17 +683,20 @@ static void MX_GPIO_Init(void)
   HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0, SET);
+
 /* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
 // GPIO Expander Interrupt Handler
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+/*void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
 	if(GPIO_Pin == GPIO_PIN_13){
 		HAL_GPIO_WritePin(GPIOC, GPIO_Pin, GPIO_PIN_RESET);
 	}
 }
+*/
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_Heart_Beat */
@@ -735,6 +754,7 @@ void Update_Throttle(void *argument)
 
 	  //change for bistable relay
 	  //gonna have to think about this section
+
 	  if(mc_main_ctrl){
 		  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0, GPIO_PIN_SET);
 	  }else{
@@ -786,18 +806,31 @@ void Update_Throttle(void *argument)
 void Lights_Control(void *argument)
 {
   /* USER CODE BEGIN Lights_Control */
-  left_turn_active = true;
+  //left_turn_active = true;
 
   /* Infinite loop */
   for(;;)
   {
-
+	  if (blinkers_active) {
+		  if (signal_counter < 5) {
+			  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, RESET);
+			  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_1, RESET);
+		  }
+		  else {
+			  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, SET);
+			  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_1, SET);
+		  }
+		  signal_counter++;
+		  signal_counter = signal_counter%10;
+		  osDelay(100);
+		  continue;
+	  }
 
 	  if(left_turn_active){
 		  if(signal_counter < 5){
-			  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, SET);
-		  }else{
 			  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, RESET);
+		  }else{
+			  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, SET);
 		  }
 		  signal_counter++;
 
@@ -812,23 +845,26 @@ void Lights_Control(void *argument)
 
 	  if(right_turn_active){
 		  if(signal_counter < 5){
-			  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0, SET);
+			  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_1, RESET);
 		  }else{
-			  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0, RESET);
+			  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_1, SET);
 		  }
 		  signal_counter++;
-
-	  }else{
+	  }
+	  else{
 		  if(brakes_active){
-			  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0, SET);
+			  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_1, SET);
 		  }
 		  else{
-			  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0, RESET);
+			  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_1, RESET);
 		  }
 	  }
 
-	  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0, rc_light_en); //sets center rear light (brake light)
-
+	  if(brakes_active){
+		  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0, RESET); //sets center rear light (brake light)
+	  }else{
+		  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0, SET);
+	  }
 	  signal_counter = signal_counter%10;
 	  osDelay(100);
   }
@@ -844,7 +880,9 @@ void Lights_Control(void *argument)
 /* USER CODE END Header_Read_Sensors */
 void Read_Sensors(void *argument)
 {
+
   /* USER CODE BEGIN Read_Sensors */
+	/*
   INA226 currentSensor;
   if (currentSensor.Init(hi2c2) != HAL_OK) {
 	  Error_Handler();
@@ -856,10 +894,12 @@ void Read_Sensors(void *argument)
 	  Error_Handler();
   }
 
-
+	*/
 
   /* Infinite loop */
+
   for(;;){
+	  /*
 	//update global variables for current sense
 	if (currentSensor.getPower() != HAL_OK) {
 		Error_Handler();
@@ -901,7 +941,8 @@ void Read_Sensors(void *argument)
 	if (HAL_CAN_AddTxMessage(&hcan1, &TxHeader, TxData, &TxMailbox) != HAL_OK) {
 		Error_Handler();
 	}
-
+	*/
+	  osDelay(100);
   }
 
 
