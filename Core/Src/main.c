@@ -172,6 +172,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_PIN)
 	if (GPIO_PIN == GPIO_PIN_13) {
 //		kill_sw = 0;
 //		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, kill_sw);
+		//
 	}
 }
 
@@ -231,24 +232,27 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan1)
 
 		  //byte #2
 		  if((RxData[2] & 0x01) != 0x00){
-			  blinkers_active = true; // turn brakes on
+			  blinkers_active = true;
 
 		  }else{
-			  blinkers_active = false; // turn breaks off
+			  blinkers_active = false;
 		  }
 
-		  if((RxData[2] & 0x40) != 0x00){
-
-			  left_turn_active = true; // turn brakes on
-
+		  if((RxData[2] & 0x02) != 0x00){
+			  if(left_turn_active != true){
+				  left_turn_active = true; // Turn on left
+				  right_turn_active = false; // Turn off right
+				  signal_counter = 0;
+			  }
 
 		  }else{
-			  left_turn_active = false; // turn breaks off
+			  left_turn_active = false;
 		  }
 
 		  if((RxData[2] & 0x04) != 0x00){
 			  if(right_turn_active != true){
-				  right_turn_active = true; //Forward
+				  right_turn_active = true; // Turn on right
+				  left_turn_active = false; //Turn off left
 				  signal_counter = 0;
 			  }
 
