@@ -23,6 +23,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "stdbool.h"
+#include "INA226.h"
 //#include "INA226.h"
 /* USER CODE END Includes */
 
@@ -270,7 +271,7 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan1)
   }
 }
 
-
+INA226_t INA226_IVP;
 
 
 
@@ -338,6 +339,13 @@ int main(void)
   TxHeader.StdId = 0x446;
   TxHeader.RTR = CAN_RTR_DATA;
   TxHeader.DLC = 2;
+
+  if(INA226_Initialize(&INA226_IVP, &hi2c2, 10, 20) != HAL_OK){ Error_Handler();}
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_2, RESET);
+
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_2, SET);
+
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_2, RESET);
   /* USER CODE END 2 */
 
   /* Init scheduler */
@@ -882,73 +890,59 @@ void Lights_Control(void *argument)
 /* USER CODE END Header_Read_Sensors */
 void Read_Sensors(void *argument)
 {
-
   /* USER CODE BEGIN Read_Sensors */
-	/*
-  INA226 currentSensor;
-  if (currentSensor.Init(hi2c2) != HAL_OK) {
-	  Error_Handler();
-  }
 
-  IMU inertialMeasurementUnit;
-  uint8_t errNum = inertialMeasurementUnit.IMU_INIT(hi2c2);
-  if (errNum != 0) {
-	  Error_Handler();
-  }
+	//Write HERE
 
-	*/
+	int HAL_CAN_BUSY = 0;
+	uint64_t messages_sent = 0;
+
+	CAN_TxHeaderTypeDef TxHeader;
+	uint8_t TxData[8] = { 0 };
+	uint32_t TxMailbox = { 0 };
+
+
+	TxHeader.IDE = CAN_ID_STD; // Standard ID (not extended)
+	TxHeader.StdId = 0x0; // 11 bit Identifier
+	TxHeader.RTR = CAN_RTR_DATA; // Std RTR Data frame
+	TxHeader.DLC = 8; // 8 bytes being transmitted
+
+	//Message ID 2 for VCU
+	TxData[0] = 2;
+
+	uint8_t ina226_data[2];
+
+	HAL_CAN_AddTxMessage(&hcan1, &TxHeader, TxData, &TxMailbox);
 
   /* Infinite loop */
+  for(;;)
+  {
+	  //INA226_t *data = (INA226_t *)argument;
+	  INA226_IVP.current = getCurrentAmp(&INA226_IVP);
+	  INA226_IVP.power = getPowerWatt(&INA226_IVP);
 
-  for(;;){
-	  /*
-	//update global variables for current sense
-	if (currentSensor.getPower() != HAL_OK) {
-		Error_Handler();
-	}
+	  //Store in CAN, power byte L and H
+	  ina226_data[0] = INA226_IVP.power & 0xFF;
+	  ina226_data[1] = (INA226_IVP.power >> 8) & 0xFF;
 
+	  //Assign CAN message
+	  TxData[0] = 2;
+	  TxData[1] = ina226_data[0];
+	  TxData[2] = ina226_data[1];
 
-	power = currentSensor.Power();
+	  while(!HAL_CAN_GetTxMailboxesFreeLevel(&hcan1));
+	  HAL_StatusTypeDef status;
+	  status = HAL_CAN_AddTxMessage(&hcan1, &TxHeader, TxData, &TxMailbox);
+	  messages_sent++;
+	  if (status == HAL_ERROR){
+		  Error_Handler();
+	  }
+	  else if(status == HAL_BUSY){
+		  HAL_CAN_BUSY++;
+	  }
 
-	powerInteger = floor(power/0.025);
-	powerLSB = (powerInteger >> 8);
-	powerMSB = (powerInteger - powerLSB) >> 8;
-
-
-	if (inertialMeasurementUnit.IMU_ReadAccel() != HAL_OK) {
-		Error_Handler();
-	}
-
-	if (inertialMeasurementUnit.IMU_ReadGyro() != HAL_OK) {
-		Error_Handler();
-	}
-
-	//update global variables for IMU
-	accelInteger = (uint16_t)floor(inertialMeasurementUnit.accelData[0]) * 65536.0/4);
-	accelLSB = (accelInteger >> 8);
-	accelMSB = (accelInteger - accelLSB) >> 8;
-
-	velocityInteger = (uint16_t)floor(inertialMeasurementUnit.gyroData[0] * 65536.0/250);
-	velocityLSB = (velocityInteger >> 8);
-	velocityMSB = (velocityInteger - velocityLSB) >> 8;
-
-	//update TxData
-	TxData[0] = 2;
-	TxData[1] = powerLSB;
-	TxData[2] = powerMSB;
-	TxData[3] = velocityLSB;
-	TxData[4] = velocityMSB;
-
-	//send CAN message
-	if (HAL_CAN_AddTxMessage(&hcan1, &TxHeader, TxData, &TxMailbox) != HAL_OK) {
-		Error_Handler();
-	}
-	*/
-	  osDelay(100);
+    osDelay(1);
   }
-
-
-
   /* USER CODE END Read_Sensors */
 }
 
