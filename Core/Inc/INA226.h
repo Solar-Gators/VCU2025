@@ -46,8 +46,8 @@ typedef struct{
 	uint16_t shuntVoltage;
 	uint16_t busVoltage;
 	uint16_t power;
-	uint16_t current;
-	uint16_t calibration;
+	float current;
+	float calibration;
 }INA226_t;
 
 //INA226 pointer to struct,pointer of I2C handler
@@ -65,8 +65,8 @@ HAL_StatusTypeDef INA226_WriteRegister(INA226_t *dev, uint8_t reg, uint16_t *dat
 
 
 //High-Level Functions:
-uint16_t getCurrentAmp(INA226_t *dev);
-uint16_t getPowerWatt(INA226_t *dev);
+float getCurrentAmp(INA226_t *dev);
+float getPowerWatt(INA226_t *dev);
 
 /* Exported functions prototypes ---------------------------------------------*/
 void Error_Handler(void);

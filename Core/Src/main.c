@@ -24,7 +24,6 @@
 /* USER CODE BEGIN Includes */
 #include "stdbool.h"
 #include "INA226.h"
-//#include "INA226.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/

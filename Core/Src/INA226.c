@@ -66,7 +66,7 @@ HAL_StatusTypeDef  INA226_Initialize(INA226_t *dev, I2C_HandleTypeDef *i2cHandle
 
 	//calibration register value (page 15)
 	CAL = (0.00512)/(dev->current_LSB * shuntResistance);
-	status = INA226_WriteRegister(dev, INA226_CALIB_REG, &CAL);
+	status = INA226_WriteRegister(dev, INA226_CALIB_REG, CAL);
 	status = INA226_ReadRegister(dev,INA226_CALIB_REG , &regData);
 	errNum += (status != HAL_OK);
 	dev->calibration = regData;
@@ -97,7 +97,7 @@ HAL_StatusTypeDef INA226_ReadRegister(INA226_t *dev, uint8_t reg, uint16_t *data
     return status;
 }
 
-HAL_StatusTypeDef INA226_WriteRegister(INA226_t *dev, uint8_t reg, uint16_t *data){
+HAL_StatusTypeDef INA226_WriteRegister(INA226_t *dev, uint8_t reg, uint16_t data){
     // Write 2 bytes (16 bits) to the specified register
 	uint16_t passData = ((*data >> 8) | (*data << 8));
 	HAL_StatusTypeDef status;
@@ -110,22 +110,24 @@ HAL_StatusTypeDef INA226_WriteRegister(INA226_t *dev, uint8_t reg, uint16_t *dat
 }
 
 // return current value after multiplication
-uint16_t getCurrentAmp(INA226_t *dev){
+float getCurrentAmp(INA226_t *dev){
 	uint16_t regData;
-	uint16_t currentData;
+	float currentData;
 	float rawVoltage;
 	INA226_ReadRegister(dev, INA226_SHUNT_VOLT_REG, &regData);
 	rawVoltage = (float)regData * 81.82 / 32768;
-	currentData = (uint16_t)(rawVoltage/0.02);
+	currentData = ((rawVoltage/0.02)/1000); //mA to A
 	return currentData;
 }
 
 // return power value after multiplication
-uint16_t getPowerWatt(INA226_t *dev){
+float getPowerWatt(INA226_t *dev){
 	uint16_t regData;
-	uint16_t powerData;
-	INA226_ReadRegister(dev, INA226_POWER_REG,&regData);
-	powerData = regData * dev->current_LSB;
+	float rawBusVoltage;
+	float powerData;
+	INA226_ReadRegister(dev, INA226_BUS_VOLT_REG,&regData);
+	rawBusVoltage = (float)regData * 40.96 / 32768;
+	powerData = (rawBusVoltage*dev->current);
 	return powerData;
 }
 
