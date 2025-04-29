@@ -110,7 +110,7 @@ bool left_turn_active;
 bool right_turn_active;
 
 
-bool dirrection;
+bool direction;
 bool mc_main_ctrl;
 bool array;
 bool array_precharge;
@@ -166,14 +166,31 @@ CAN_RxHeaderTypeDef RxHeader;
 uint8_t datacheck = 0;
 uint8_t RxData[8];  // Array to store the received data
 
+int HAL_CAN_BUSY = 0;
+uint64_t messages_sent = 0;
+
+CAN_TxHeaderTypeDef TxHeader;
+uint8_t TxData[8] = { 0 };
+uint32_t TxMailbox = { 0 };
+
 //CAN transmission
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_PIN)
 {
 	if (GPIO_PIN == GPIO_PIN_13) {
-//		kill_sw = 0;
-//		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, kill_sw);
-		//
+		TxData[0] = 2;
+		TxData[1] = TxData[1] | 0x04;
+
+		while(!HAL_CAN_GetTxMailboxesFreeLevel(&hcan1));
+		HAL_StatusTypeDef status;
+		status = HAL_CAN_AddTxMessage(&hcan1, &TxHeader, TxData, &TxMailbox);
+		messages_sent++;
+		if (status == HAL_ERROR){
+			Error_Handler();
+		}
+		else if(status == HAL_BUSY){
+			HAL_CAN_BUSY++;
+		}
 	}
 }
 
@@ -200,16 +217,16 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan1)
 			  //preform shut down sequence
 		  }
 
-		  if((RxData[1] & 0x40) != 0x00){
+		  if((RxData[1] & 0x02) != 0x00){
 			  brakes_active = true; // turn brakes on
 		  }else{
 			  brakes_active = false; // turn breaks off
 		  }
 
 		  if((RxData[1] & 0x20) != 0x00){
-			  dirrection = true; //Forward
+			  direction = true; //Forward
 		  }else{
-			  dirrection = false;
+			  direction = false; // Reverse
 		  }
 
 		  if((RxData[1] & 0x10) != 0x00){
@@ -292,7 +309,7 @@ int main(void)
   right_turn_active = true;
 
 
-  dirrection = false;
+  direction = false;
   mc_pwreco_ctrl = false;
   mc_main_ctrl = false;
   array = false;
@@ -335,10 +352,13 @@ int main(void)
 
 
   //hdac1.State = HAL_DAC_STATE_RESET;
-  TxHeader.IDE = CAN_ID_STD;
-  TxHeader.StdId = 0x446;
-  TxHeader.RTR = CAN_RTR_DATA;
-  TxHeader.DLC = 2;
+
+
+
+  TxHeader.IDE = CAN_ID_STD; // Standard ID (not extended)
+  TxHeader.StdId = 0x02; // 11 bit Identifier
+  TxHeader.RTR = CAN_RTR_DATA; // Std RTR Data frame
+  TxHeader.DLC = 8; // 8 bytes being transmitted
 
   if(INA226_Initialize(&INA226_IVP, &hi2c2, 10, 20) != HAL_OK){ Error_Handler();}
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_2, RESET);
@@ -724,7 +744,6 @@ void Heart_Beat(void *argument)
   /* Infinite loop */
   for(;;)
   {
-	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);
 	HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_13);
     osDelay(500);
   }
@@ -780,7 +799,7 @@ void Update_Throttle(void *argument)
 	  }
 
 
-	  if(dirrection == true){
+	  if(direction == true){
 		  //closed forward
 		  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, SET);
 	  }else{
@@ -846,10 +865,10 @@ void Lights_Control(void *argument)
 
 	  }else{
 		  if(brakes_active){
-			  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, RESET);
+			  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, SET);
 		  }
 		  else{
-			  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, SET);
+			  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, RESET);
 		  }
 	  }
 
@@ -871,9 +890,9 @@ void Lights_Control(void *argument)
 	  }
 
 	  if(brakes_active){
-		  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0, RESET); //sets center rear light (brake light)
+		  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0, SET); //sets center rear light (brake light)
 	  }else{
-		  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0, SET);
+		  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0, RESET);
 	  }
 	  signal_counter = signal_counter%10;
 	  osDelay(100);
@@ -903,7 +922,7 @@ void Read_Sensors(void *argument)
 
 
 	TxHeader.IDE = CAN_ID_STD; // Standard ID (not extended)
-	TxHeader.StdId = 0x0; // 11 bit Identifier
+	TxHeader.StdId = 0x07; // 11 bit Identifier
 	TxHeader.RTR = CAN_RTR_DATA; // Std RTR Data frame
 	TxHeader.DLC = 8; // 8 bytes being transmitted
 
