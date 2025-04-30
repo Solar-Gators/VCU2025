@@ -178,6 +178,10 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_PIN)
         TxData_status[1] |= (1 << 0); // Bit 0 = MC status
     if (array)
         TxData_status[1] |= (1 << 1); // Bit 1 = Array status
+    if (array_precharge)
+        TxData_status[1] |= (1 << 2); // Bit 2 = Array precharge status
+    if (direction)
+        TxData_status[1] |= (1 << 3); // Bit 3 = Direction status
     // kill switch?
 
 		while(!HAL_CAN_GetTxMailboxesFreeLevel(&hcan1));
@@ -849,27 +853,27 @@ void Update_Throttle(void *argument)
 	  //change for bistable relay
 	  //gonna have to think about this section
 
+    // i think these are active low (at least this top one is most likely, so im assuming the next one is too)
 	  if(mc_main_ctrl){
-		  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0, GPIO_PIN_SET);
-	  }else{
 		  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0, GPIO_PIN_RESET);
+	  }else{
+		  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0, GPIO_PIN_SET);
 	  }
 
 	  if(mc_pwreco_ctrl){
 		  //closed power
-		  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_SET);
+		  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_RESET);
 	  }else{
 		  //open eco
-		  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_RESET);
+		  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_SET);
 	  }
-
 
 	  if(direction == true){
 		  //closed forward
-		  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, SET);
+		  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, RESET);
 	  }else{
 		  //open backward
-		  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, RESET);
+		  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, SET);
 	  }
 
 	  if(array_precharge == true){
@@ -1024,6 +1028,10 @@ void Read_Sensors(void *argument)
         TxData_status[1] |= (1 << 0); // Bit 0 = MC status
     if (array)
         TxData_status[1] |= (1 << 1); // Bit 1 = Array status
+    if (array_precharge)
+        TxData_status[1] |= (1 << 2); // Bit 2 = Array precharge status
+    if (direction)
+        TxData_status[1] |= (1 << 3); // Bit 3 = Direction status
     // kill switch?
     while(!HAL_CAN_GetTxMailboxesFreeLevel(&hcan1));
     HAL_StatusTypeDef status2;
