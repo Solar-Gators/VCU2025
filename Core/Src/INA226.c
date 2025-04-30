@@ -110,22 +110,25 @@ HAL_StatusTypeDef INA226_WriteRegister(INA226_t *dev, uint8_t reg, uint16_t *dat
 }
 
 // return current value after multiplication
-uint16_t getCurrentAmp(INA226_t *dev){
+float getCurrentAmp(INA226_t *dev){
 	uint16_t regData;
-	uint16_t currentData;
+	float currentData;
 	float rawVoltage;
 	INA226_ReadRegister(dev, INA226_SHUNT_VOLT_REG, &regData);
 	rawVoltage = (float)regData * 81.82 / 32768;
-	currentData = (uint16_t)(rawVoltage/0.02);
+	currentData = ((rawVoltage/0.02)/1000); //mA to A
+	dev->current = currentData;
 	return currentData;
 }
 
 // return power value after multiplication
-uint16_t getPowerWatt(INA226_t *dev){
+float getPowerWatt(INA226_t *dev){
 	uint16_t regData;
-	uint16_t powerData;
-	INA226_ReadRegister(dev, INA226_POWER_REG,&regData);
-	powerData = regData * dev->current_LSB;
+	float rawBusVoltage;
+	float powerData;
+	INA226_ReadRegister(dev, INA226_BUS_VOLT_REG,&regData);
+	rawBusVoltage = (float)regData * 40.96 / 32768;
+	powerData = (rawBusVoltage*dev->current);
 	return powerData;
 }
 

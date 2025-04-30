@@ -24,7 +24,6 @@
 /* USER CODE BEGIN Includes */
 #include "stdbool.h"
 #include "INA226.h"
-//#include "INA226.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -49,6 +48,8 @@ CAN_HandleTypeDef hcan2;
 DAC_HandleTypeDef hdac1;
 
 I2C_HandleTypeDef hi2c2;
+
+TIM_HandleTypeDef htim1;
 
 /* Definitions for HeartBeat */
 osThreadId_t HeartBeatHandle;
@@ -88,6 +89,7 @@ static void MX_GPIO_Init(void);
 static void MX_DAC1_Init(void);
 static void MX_CAN1_Init(void);
 static void MX_CAN2_Init(void);
+static void MX_TIM1_Init(void);
 static void MX_I2C2_Init(void);
 void Heart_Beat(void *argument);
 void Update_Throttle(void *argument);
@@ -109,7 +111,6 @@ bool blinkers_active;
 bool left_turn_active;
 bool right_turn_active;
 
-
 bool direction;
 bool mc_main_ctrl;
 bool array;
@@ -118,10 +119,6 @@ bool mc_pwreco_ctrl;
 
 int signal_counter;
 
-
-
-//GPIO_PinState mc_main_ctrl;
-//GPIO_PinState mc_pwreco_ctrl;
 GPIO_PinState mc_fwdrev_ctrl;
 GPIO_PinState rc_light_en;
 GPIO_PinState rr_light_en;
@@ -154,12 +151,10 @@ uint16_t velocityInteger;
 uint8_t velocityLSB;
 uint8_t velocityMSB;
 
-
-
-
-CAN_TxHeaderTypeDef TxHeader;
-uint8_t TxData[8];
-uint32_t TxMailbox;
+union FloatBytes {
+    float f;
+    uint8_t bytes[4];
+} floatBytes;
 
 CAN_RxHeaderTypeDef RxHeader;
 
@@ -169,21 +164,25 @@ uint8_t RxData[8];  // Array to store the received data
 int HAL_CAN_BUSY = 0;
 uint64_t messages_sent = 0;
 
-CAN_TxHeaderTypeDef TxHeader;
-uint8_t TxData[8] = { 0 };
-uint32_t TxMailbox = { 0 };
+CAN_TxHeaderTypeDef TxHeader_status;
+uint8_t TxData_status[8] = { 0 };
+uint32_t TxMailbox_status = { 0 };
 
 //CAN transmission
-
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_PIN)
 {
 	if (GPIO_PIN == GPIO_PIN_13) {
-		TxData[0] = 2;
-		TxData[1] = TxData[1] | 0x04;
+    TxData_status[1] = 0; // Reset status byte
+    // for byte 1, bit 0 = mc, bit 1 = array, bit 2 = kill switch
+    if (mc_main_ctrl)
+        TxData_status[1] |= (1 << 0); // Bit 0 = MC status
+    if (array)
+        TxData_status[1] |= (1 << 1); // Bit 1 = Array status
+    // kill switch?
 
 		while(!HAL_CAN_GetTxMailboxesFreeLevel(&hcan1));
 		HAL_StatusTypeDef status;
-		status = HAL_CAN_AddTxMessage(&hcan1, &TxHeader, TxData, &TxMailbox);
+		status = HAL_CAN_AddTxMessage(&hcan1, &TxHeader_status, TxData_status, &TxMailbox_status);
 		messages_sent++;
 		if (status == HAL_ERROR){
 			Error_Handler();
@@ -339,6 +338,7 @@ int main(void)
   MX_DAC1_Init();
   MX_CAN1_Init();
   MX_CAN2_Init();
+  MX_TIM1_Init();
   MX_I2C2_Init();
   /* USER CODE BEGIN 2 */
   HAL_CAN_Start(&hcan1);
@@ -349,16 +349,11 @@ int main(void)
 	  Error_Handler();
   }
 
-
-
-  //hdac1.State = HAL_DAC_STATE_RESET;
-
-
-
-  TxHeader.IDE = CAN_ID_STD; // Standard ID (not extended)
-  TxHeader.StdId = 0x02; // 11 bit Identifier
-  TxHeader.RTR = CAN_RTR_DATA; // Std RTR Data frame
-  TxHeader.DLC = 8; // 8 bytes being transmitted
+  TxHeader_status.IDE = CAN_ID_STD; // Standard ID (not extended)
+  TxHeader_status.StdId = 0x02; // 11 bit Identifier
+  TxData_status[0] = 0x02; // 0x02 is the ID for the status message
+  TxHeader_status.RTR = CAN_RTR_DATA; // Std RTR Data frame
+  TxHeader_status.DLC = 8; // 8 bytes being transmitted
 
   if(INA226_Initialize(&INA226_IVP, &hi2c2, 10, 20) != HAL_OK){ Error_Handler();}
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_2, RESET);
@@ -654,6 +649,76 @@ static void MX_I2C2_Init(void)
 }
 
 /**
+  * @brief TIM1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM1_Init(void)
+{
+
+  /* USER CODE BEGIN TIM1_Init 0 */
+
+  /* USER CODE END TIM1_Init 0 */
+
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
+  TIM_BreakDeadTimeConfigTypeDef sBreakDeadTimeConfig = {0};
+
+  /* USER CODE BEGIN TIM1_Init 1 */
+
+  /* USER CODE END TIM1_Init 1 */
+  htim1.Instance = TIM1;
+  htim1.Init.Prescaler = 0;
+  htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim1.Init.Period = 65535;
+  htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim1.Init.RepetitionCounter = 0;
+  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_OC_Init(&htim1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterOutputTrigger2 = TIM_TRGO2_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.OCMode = TIM_OCMODE_TIMING;
+  sConfigOC.Pulse = 100;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;
+  sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
+  if (HAL_TIM_OC_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_DISABLE;
+  sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_DISABLE;
+  sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;
+  sBreakDeadTimeConfig.DeadTime = 0;
+  sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
+  sBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_HIGH;
+  sBreakDeadTimeConfig.BreakFilter = 0;
+  sBreakDeadTimeConfig.Break2State = TIM_BREAK2_DISABLE;
+  sBreakDeadTimeConfig.Break2Polarity = TIM_BREAK2POLARITY_HIGH;
+  sBreakDeadTimeConfig.Break2Filter = 0;
+  sBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_DISABLE;
+  if (HAL_TIMEx_ConfigBreakDeadTime(&htim1, &sBreakDeadTimeConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM1_Init 2 */
+
+  /* USER CODE END TIM1_Init 2 */
+  HAL_TIM_MspPostInit(&htim1);
+
+}
+
+/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -911,15 +976,9 @@ void Read_Sensors(void *argument)
 {
   /* USER CODE BEGIN Read_Sensors */
 
-	//Write HERE
-
-	int HAL_CAN_BUSY = 0;
-	uint64_t messages_sent = 0;
-
 	CAN_TxHeaderTypeDef TxHeader;
 	uint8_t TxData[8] = { 0 };
 	uint32_t TxMailbox = { 0 };
-
 
 	TxHeader.IDE = CAN_ID_STD; // Standard ID (not extended)
 	TxHeader.StdId = 0x07; // 11 bit Identifier
@@ -927,9 +986,7 @@ void Read_Sensors(void *argument)
 	TxHeader.DLC = 8; // 8 bytes being transmitted
 
 	//Message ID 2 for VCU
-	TxData[0] = 2;
-
-	uint8_t ina226_data[2];
+	TxData[0] = 7;
 
 	HAL_CAN_AddTxMessage(&hcan1, &TxHeader, TxData, &TxMailbox);
 
@@ -940,14 +997,14 @@ void Read_Sensors(void *argument)
 	  INA226_IVP.current = getCurrentAmp(&INA226_IVP);
 	  INA226_IVP.power = getPowerWatt(&INA226_IVP);
 
-	  //Store in CAN, power byte L and H
-	  ina226_data[0] = INA226_IVP.power & 0xFF;
-	  ina226_data[1] = (INA226_IVP.power >> 8) & 0xFF;
+    union FloatBytes power;
+    power.f = INA226_IVP.power;
 
 	  //Assign CAN message
-	  TxData[0] = 2;
-	  TxData[1] = ina226_data[0];
-	  TxData[2] = ina226_data[1];
+	  TxData[1] = power.bytes[0]; //LSB
+	  TxData[2] = power.bytes[1];
+    TxData[3] = power.bytes[2];
+    TxData[4] = power.bytes[3]; //MSB 
 
 	  while(!HAL_CAN_GetTxMailboxesFreeLevel(&hcan1));
 	  HAL_StatusTypeDef status;
@@ -960,7 +1017,26 @@ void Read_Sensors(void *argument)
 		  HAL_CAN_BUSY++;
 	  }
 
-    osDelay(1);
+    // also send status message
+    TxData_status[1] = 0; // Reset status byte
+    // for byte 1, bit 0 = mc, bit 1 = array, bit 2 = kill switch
+    if (mc_main_ctrl)
+        TxData_status[1] |= (1 << 0); // Bit 0 = MC status
+    if (array)
+        TxData_status[1] |= (1 << 1); // Bit 1 = Array status
+    // kill switch?
+    while(!HAL_CAN_GetTxMailboxesFreeLevel(&hcan1));
+    HAL_StatusTypeDef status2;
+    status2 = HAL_CAN_AddTxMessage(&hcan1, &TxHeader_status, TxData_status, &TxMailbox_status);
+    messages_sent++;
+    if (status2 == HAL_ERROR){
+        Error_Handler();
+    }
+    else if(status2 == HAL_BUSY){
+        HAL_CAN_BUSY++;
+    }
+
+    osDelay(10);
   }
   /* USER CODE END Read_Sensors */
 }
