@@ -272,6 +272,12 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan1)
 
 INA226_t INA226_IVP;
 
+union FloatBytes {
+    float value;
+    uint8_t bytes[4];
+};
+union FloatBytes fb;
+
 
 
 /* USER CODE END 0 */
@@ -902,14 +908,12 @@ void Read_Sensors(void *argument)
 
 
 	TxHeader.IDE = CAN_ID_STD; // Standard ID (not extended)
-	TxHeader.StdId = 0x0; // 11 bit Identifier
+	TxHeader.StdId = 0x2; // 11 bit Identifier
 	TxHeader.RTR = CAN_RTR_DATA; // Std RTR Data frame
 	TxHeader.DLC = 8; // 8 bytes being transmitted
 
-	//Message ID 2 for VCU
-	TxData[0] = 2;
-
-	uint8_t ina226_data[2];
+	//Message ID 7 for VCU Contactor Power
+	TxData[0] = 7;
 
 	HAL_CAN_AddTxMessage(&hcan1, &TxHeader, TxData, &TxMailbox);
 
@@ -920,14 +924,20 @@ void Read_Sensors(void *argument)
 	  INA226_IVP.current = getCurrentAmp(&INA226_IVP);
 	  INA226_IVP.power = getPowerWatt(&INA226_IVP);
 
-	  //Store in CAN, power byte L and H
-	  ina226_data[0] = INA226_IVP.power & 0xFF;
-	  ina226_data[1] = (INA226_IVP.power >> 8) & 0xFF;
+	  //use union for power
+	  fb.value = INA226_IVP.power;
 
-	  //Assign CAN message
-	  TxData[0] = 2;
-	  TxData[1] = ina226_data[0];
-	  TxData[2] = ina226_data[1];
+
+
+	  //Store in CAN, power byte L and H
+	  //ina226_data[0] = INA226_IVP.power & 0xFF;
+	  //ina226_data[1] = (INA226_IVP.power >> 8) & 0xFF;
+
+	  //Assign CAN message for Power
+	  TxData[1] = fb.bytes[0];
+	  TxData[2] = fb.bytes[1];
+	  TxData[3] = fb.bytes[2];
+	  TxData[4] = fb.bytes[3];
 
 	  while(!HAL_CAN_GetTxMailboxesFreeLevel(&hcan1));
 	  HAL_StatusTypeDef status;

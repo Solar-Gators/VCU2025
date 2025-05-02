@@ -33,6 +33,7 @@ HAL_StatusTypeDef  INA226_Initialize(INA226_t *dev, I2C_HandleTypeDef *i2cHandle
 	uint16_t regData;
 	//float CAL, we are truncating for register so it doesn't matter.
 	uint16_t CAL;
+	float CAL_divisor;
 
 
 	//Check device manufacturing and DIE ID
@@ -64,9 +65,10 @@ HAL_StatusTypeDef  INA226_Initialize(INA226_t *dev, I2C_HandleTypeDef *i2cHandle
 	dev->config = regData;
 
 
-	//calibration register value (page 15)
-	CAL = (0.00512)/(dev->current_LSB * shuntResistance);
-	status = INA226_WriteRegister(dev, INA226_CALIB_REG, CAL);
+	//calibration register value (page 15), CAL should be 839.34
+	CAL_divisor = (dev->current_LSB * (shuntResistance/1000));
+	CAL = (0.00512)/CAL_divisor;
+	status = INA226_WriteRegister(dev, INA226_CALIB_REG, &CAL);
 	status = INA226_ReadRegister(dev,INA226_CALIB_REG , &regData);
 	errNum += (status != HAL_OK);
 	dev->calibration = regData;
@@ -97,7 +99,7 @@ HAL_StatusTypeDef INA226_ReadRegister(INA226_t *dev, uint8_t reg, uint16_t *data
     return status;
 }
 
-HAL_StatusTypeDef INA226_WriteRegister(INA226_t *dev, uint8_t reg, uint16_t data){
+HAL_StatusTypeDef INA226_WriteRegister(INA226_t *dev, uint8_t reg, uint16_t *data){
     // Write 2 bytes (16 bits) to the specified register
 	uint16_t passData = ((*data >> 8) | (*data << 8));
 	HAL_StatusTypeDef status;
@@ -111,23 +113,27 @@ HAL_StatusTypeDef INA226_WriteRegister(INA226_t *dev, uint8_t reg, uint16_t data
 
 // return current value after multiplication
 float getCurrentAmp(INA226_t *dev){
-	uint16_t regData;
+	uint16_t currData;
 	float currentData;
-	float rawVoltage;
-	INA226_ReadRegister(dev, INA226_SHUNT_VOLT_REG, &regData);
-	rawVoltage = (float)regData * 81.82 / 32768;
-	currentData = ((rawVoltage/0.02)/1000); //mA to A
+	INA226_ReadRegister(dev, INA226_CURRENT_REG, &currData);
+	//rawVoltage = (float)regData * 81.82 / 32768;
+	//currentData = ((rawVoltage/0.02)/1000); //mA to A
+	currentData = (float)currData * dev->current_LSB; //mA to A
 	return currentData;
 }
 
 // return power value after multiplication
 float getPowerWatt(INA226_t *dev){
+	uint16_t powData;
 	uint16_t regData;
-	float rawBusVoltage;
 	float powerData;
+	float powerData1;
+	float rawBusVoltage;
 	INA226_ReadRegister(dev, INA226_BUS_VOLT_REG,&regData);
+	INA226_ReadRegister(dev, INA226_POWER_REG,&powData);
 	rawBusVoltage = (float)regData * 40.96 / 32768;
-	powerData = (rawBusVoltage*dev->current);
+	powerData1 = (rawBusVoltage*dev->current);
+	powerData = (float)powData * (25*dev->current_LSB);
 	return powerData;
 }
 

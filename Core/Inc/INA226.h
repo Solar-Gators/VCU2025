@@ -40,14 +40,14 @@ extern "C" {
 
 typedef struct{
 	I2C_HandleTypeDef *i2cHandle;
-	double current_LSB;
+	float current_LSB;
 	float rShunt;
 	uint16_t config;
 	uint16_t shuntVoltage;
 	uint16_t busVoltage;
-	uint16_t power;
+	float power;
 	float current;
-	float calibration;
+	uint16_t calibration;
 }INA226_t;
 
 //INA226 pointer to struct,pointer of I2C handler

@@ -1,5 +1,5 @@
 ../Core/Src/INA226.c:16:20:INA226_Initialize	40	static
-../Core/Src/INA226.c:81:19:INA226_ReadRegister	48	static
-../Core/Src/INA226.c:100:19:INA226_WriteRegister	48	static
-../Core/Src/INA226.c:113:7:getCurrentAmp	32	static
-../Core/Src/INA226.c:124:7:getPowerWatt	32	static
+../Core/Src/INA226.c:83:19:INA226_ReadRegister	48	static
+../Core/Src/INA226.c:102:19:INA226_WriteRegister	48	static
+../Core/Src/INA226.c:115:7:getCurrentAmp	24	static
+../Core/Src/INA226.c:126:7:getPowerWatt	32	static
