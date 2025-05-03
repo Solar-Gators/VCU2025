@@ -38,7 +38,6 @@
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
@@ -105,6 +104,8 @@ void Read_Sensors(void *argument);
 //DAC outputs
 uint16_t throttle;
 uint16_t regen;
+uint8_t regen_enable = 0;
+uint32_t last_throttle_recieved_tick = 0;
 //MC GPIO outputs
 bool brakes_active;
 bool blinkers_active;
@@ -178,8 +179,6 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_PIN)
         TxData_status[1] |= (1 << 0); // Bit 0 = MC status
     if (array)
         TxData_status[1] |= (1 << 1); // Bit 1 = Array status
-    if (array_precharge)
-        TxData_status[1] |= (1 << 2); // Bit 2 = Array precharge status
     if (direction)
         TxData_status[1] |= (1 << 3); // Bit 3 = Direction status
     // kill switch?
@@ -207,17 +206,21 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan1)
   if (RxHeader.StdId == 0x000)
   {
 	  if (RxData[0] == 0) {
-		throttle = (uint16_t)RxData[2]<<8 | RxData[1];
+      last_throttle_recieved_tick = HAL_GetTick();
+		  throttle = (uint16_t)RxData[2]<<8 | RxData[1];
 	  }
   }
   if (RxHeader.StdId == 0x7FF){
 	  if(RxData[0] == 1){
 		  //byte 1
 		  //ignition switch
-		  if((RxData[1] & 0x80) != 0x00){
+		  if((RxData[1] & 0x01) != 0x00){
+        /*
+        I don't believe the vcu needs this
 			  mppt_pre_contactor_en = false;
 			  mppt_contactor_en = false;
 			  //preform shut down sequence
+        */
 		  }
 
 		  if((RxData[1] & 0x02) != 0x00){
@@ -238,18 +241,11 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan1)
 			  mc_main_ctrl = false;
 		  }
 
-		  if((RxData[1] & 0x08) != 0x00){
+		  if((RxData[1] & 0x04) != 0x00){
 			  array = true;
 		  }else{
 			  array = false;
 		  }
-
-		  if((RxData[1] & 0x04) != 0x00){
-			  array_precharge = true;
-		  }else{
-			  array_precharge = false;
-		  }
-
 
 		  //byte #2
 		  if((RxData[2] & 0x01) != 0x00){
@@ -286,6 +282,12 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan1)
 			  right_turn_active = false;
 		  }
 
+      if((RxData[2] & 0x10) != 0x00){
+        regen_enable = 1;
+      }
+      else{
+        regen_enable = 0;
+      }
 
 	  }
   }
@@ -834,18 +836,22 @@ void Update_Throttle(void *argument)
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_2, SET);
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_2, SET);
 
-
-
   HAL_DAC_Start(&hdac1,DAC_CHANNEL_1); //Start DAC 1 and 2
   HAL_DAC_Start(&hdac1,DAC_CHANNEL_2);
-  array = 1;
-  array_precharge = 1;
-
 
   /* Infinite loop */
   for(;;)
   {
+    if (HAL_GetTick() - last_throttle_recieved_tick > 300) {
+      throttle = 0; // Set throttle to 0 if no message received for .3 second
+    }
 	  HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, throttle);
+    
+    if (regen_enable && throttle == 0) {
+      regen = 4095; // also try 2048
+    } else {
+      regen = 0;
+    }
 	  HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, regen);
 
 	  //updates gpio pins with states from global variables
@@ -887,7 +893,6 @@ void Update_Throttle(void *argument)
 	  }else{
 		  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_3, SET);
 	  }
-
 
 	  osDelay(20);
   }
@@ -1027,9 +1032,7 @@ void Read_Sensors(void *argument)
     if (mc_main_ctrl)
         TxData_status[1] |= (1 << 0); // Bit 0 = MC status
     if (array)
-        TxData_status[1] |= (1 << 1); // Bit 1 = Array status
-    if (array_precharge)
-        TxData_status[1] |= (1 << 2); // Bit 2 = Array precharge status
+        TxData_status[1] |= (1 << 2); // Bit 2 = array status 
     if (direction)
         TxData_status[1] |= (1 << 3); // Bit 3 = Direction status
     // kill switch?
