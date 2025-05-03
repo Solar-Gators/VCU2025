@@ -115,7 +115,11 @@ bool right_turn_active;
 bool direction;
 bool mc_main_ctrl;
 bool array;
-bool array_precharge;
+bool old_array;
+bool start_array_process = false;
+bool array_precharge_contactor_en = false; // port c2
+bool array_contactor_en = false; // port c3
+uint32_t precharge_start_tick = 0;
 bool mc_pwreco_ctrl;
 
 int signal_counter;
@@ -243,9 +247,16 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan1)
 
 		  if((RxData[1] & 0x04) != 0x00){
 			  array = true;
+        if (array != old_array) {
+          start_array_process = true;
+        }
 		  }else{
 			  array = false;
+        if (array != old_array) {
+          start_array_process = true;
+        }
 		  }
+      old_array = array;
 
 		  //byte #2
 		  if((RxData[2] & 0x01) != 0x00){
@@ -318,8 +329,6 @@ int main(void)
   mc_pwreco_ctrl = false;
   mc_main_ctrl = false;
   array = false;
-  array_precharge = false;
-
 
   /* USER CODE END 1 */
 
@@ -848,7 +857,7 @@ void Update_Throttle(void *argument)
 	  HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, throttle);
     
     if (regen_enable && throttle == 0) {
-      regen = 4095; // also try 2048
+      regen = 2500; // also try 2048
     } else {
       regen = 0;
     }
@@ -882,6 +891,27 @@ void Update_Throttle(void *argument)
 		  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, SET);
 	  }
 
+    // enable precharger for 250ms before enabling array contactor
+    if (array && start_array_process && precharge_start_tick == 0) {
+        array_precharge_contactor_en = true;
+        HAL_GPIO_WritePin(GPIOC, GPIO_PIN_2, SET); // enable precharge contactor
+        precharge_start_tick = HAL_GetTick();
+    }
+    if (precharge_start_tick && (HAL_GetTick() - precharge_start_tick > 250)) {
+        HAL_GPIO_WritePin(GPIOC, GPIO_PIN_3, SET); // enable array contactor
+        HAL_GPIO_WritePin(GPIOC, GPIO_PIN_2, RESET); // disable precharge contactor
+        start_array_process = false;
+        precharge_start_tick = 0;
+    }
+
+    if (!array && start_array_process) {
+        array_precharge_contactor_en = false;
+        HAL_GPIO_WritePin(GPIOC, GPIO_PIN_2, RESET); // disable precharge contactor
+        HAL_GPIO_WritePin(GPIOC, GPIO_PIN_3, RESET); // disable array contactor
+        start_array_process = false;
+    }
+
+    /*
 	  if(array_precharge == true){
 		  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_2, RESET);
 	  }else{
@@ -893,6 +923,7 @@ void Update_Throttle(void *argument)
 	  }else{
 		  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_3, SET);
 	  }
+      */
 
 	  osDelay(20);
   }
