@@ -125,14 +125,14 @@ float getCurrentAmp(INA226_t *dev){
 // return power value after multiplication
 float getPowerWatt(INA226_t *dev){
 	uint16_t powData;
-	uint16_t regData;
+	//uint16_t regData;
 	float powerData;
-	float powerData1;
-	float rawBusVoltage;
-	INA226_ReadRegister(dev, INA226_BUS_VOLT_REG,&regData);
+	//float powerData1;
+	//float rawBusVoltage;
+	//INA226_ReadRegister(dev, INA226_BUS_VOLT_REG,&regData);
 	INA226_ReadRegister(dev, INA226_POWER_REG,&powData);
-	rawBusVoltage = (float)regData * 40.96 / 32768;
-	powerData1 = (rawBusVoltage*dev->current);
+	//rawBusVoltage = (float)regData * 40.96 / 32768;
+	//powerData1 = (rawBusVoltage*dev->current);
 	powerData = (float)powData * (25*dev->current_LSB);
 	return powerData;
 }

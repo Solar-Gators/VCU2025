@@ -11,5 +11,5 @@
 ../Core/Src/main.c:748:6:Update_Throttle	6
 ../Core/Src/main.c:821:6:Lights_Control	10
 ../Core/Src/main.c:896:6:Read_Sensors	4
-../Core/Src/main.c:968:6:HAL_TIM_PeriodElapsedCallback	2
-../Core/Src/main.c:985:6:Error_Handler	1
+../Core/Src/main.c:966:6:HAL_TIM_PeriodElapsedCallback	2
+../Core/Src/main.c:983:6:Error_Handler	1

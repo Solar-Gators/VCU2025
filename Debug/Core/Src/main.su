@@ -10,6 +10,6 @@
 ../Core/Src/main.c:724:6:Heart_Beat	16	static
 ../Core/Src/main.c:748:6:Update_Throttle	16	static
 ../Core/Src/main.c:821:6:Lights_Control	16	static
-../Core/Src/main.c:896:6:Read_Sensors	88	static
-../Core/Src/main.c:968:6:HAL_TIM_PeriodElapsedCallback	16	static
-../Core/Src/main.c:985:6:Error_Handler	4	static,ignoring_inline_asm
+../Core/Src/main.c:896:6:Read_Sensors	80	static
+../Core/Src/main.c:966:6:HAL_TIM_PeriodElapsedCallback	16	static
+../Core/Src/main.c:983:6:Error_Handler	4	static,ignoring_inline_asm

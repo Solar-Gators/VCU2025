@@ -2,4 +2,4 @@
 ../Core/Src/INA226.c:83:19:INA226_ReadRegister	48	static
 ../Core/Src/INA226.c:102:19:INA226_WriteRegister	48	static
 ../Core/Src/INA226.c:115:7:getCurrentAmp	24	static
-../Core/Src/INA226.c:126:7:getPowerWatt	32	static
+../Core/Src/INA226.c:126:7:getPowerWatt	24	static
