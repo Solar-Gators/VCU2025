@@ -111,11 +111,13 @@ bool brakes_active;
 bool blinkers_active;
 bool left_turn_active;
 bool right_turn_active;
+bool ignition_switch
 
 bool direction;
 bool mc_main_ctrl;
 bool array;
 bool old_array;
+bool kill_switch;
 bool start_array_process = false;
 bool array_precharge_contactor_en = false; // port c2
 bool array_contactor_en = false; // port c3
@@ -171,19 +173,13 @@ CAN_TxHeaderTypeDef TxHeader_status;
 uint8_t TxData_status[8] = { 0 };
 uint32_t TxMailbox_status = { 0 };
 
-//CAN transmission
+//CAN tranmission with kill_switch
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_PIN)
 {
 	if (GPIO_PIN == GPIO_PIN_13) {
-    TxData_status[1] = 0; // Reset status byte
-    // for byte 1, bit 0 = mc, bit 1 = array, bit 2 = kill switch
-    if (mc_main_ctrl)
-        TxData_status[1] |= (1 << 0); // Bit 0 = MC status
-    if (array)
-        TxData_status[1] |= (1 << 1); // Bit 1 = Array status
-    if (direction)
-        TxData_status[1] |= (1 << 3); // Bit 3 = Direction status
-    // kill switch?
+		//OR current byte 1 to show enable the kill switch
+    	TxData_status[1] |= (1 << 4); // Bit 4 = Kill switch status
+    	kill_switch = true; //bool for thread
 
 		while(!HAL_CAN_GetTxMailboxesFreeLevel(&hcan1));
 		HAL_StatusTypeDef status;
@@ -219,7 +215,10 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan1)
 		  //byte 1
 		  //ignition switch
 		  if((RxData[1] & 0x01) != 0x00){
-
+			  ignition_switch = true;
+		  }
+		  else{
+			  ignition_switch = false;
 		  }
 
 		  if((RxData[1] & 0x02) != 0x00){
@@ -1018,10 +1017,10 @@ void Read_Sensors(void *argument)
     power.f = INA226_IVP.power;
 
 	  //Assign CAN message
-	  TxData[1] = power.bytes[0]; //LSB
-	  TxData[2] = power.bytes[1];
-    TxData[3] = power.bytes[2];
-    TxData[4] = power.bytes[3]; //MSB 
+	  TxData[2] = power.bytes[0]; //LSB
+	  TxData[3] = power.bytes[1];
+	  TxData[4] = power.bytes[2];
+	  TxData[5] = power.bytes[3]; //MSB
 
 	  while(!HAL_CAN_GetTxMailboxesFreeLevel(&hcan1));
 	  HAL_StatusTypeDef status;
@@ -1043,7 +1042,9 @@ void Read_Sensors(void *argument)
         TxData_status[1] |= (1 << 2); // Bit 2 = array status 
     if (direction)
         TxData_status[1] |= (1 << 3); // Bit 3 = Direction status
-    // kill switch?
+    if(kill_switch)
+    	TxData_status[1] |= (1 << 4); // Bit 4 = Kill switch status
+
     while(!HAL_CAN_GetTxMailboxesFreeLevel(&hcan1));
     HAL_StatusTypeDef status2;
     status2 = HAL_CAN_AddTxMessage(&hcan1, &TxHeader_status, TxData_status, &TxMailbox_status);
