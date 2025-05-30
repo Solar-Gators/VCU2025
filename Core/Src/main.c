@@ -111,7 +111,7 @@ bool brakes_active;
 bool blinkers_active;
 bool left_turn_active;
 bool right_turn_active;
-bool ignition_switch
+bool ignition_switch;
 
 bool direction;
 bool mc_main_ctrl;
@@ -178,8 +178,17 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_PIN)
 {
 	if (GPIO_PIN == GPIO_PIN_13) {
 		//OR current byte 1 to show enable the kill switch
-    	TxData_status[1] |= (1 << 4); // Bit 4 = Kill switch status
-    	kill_switch = true; //bool for thread
+
+    if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13) == RESET) {
+      kill_switch = true;
+      TxData_status[1] |= (1 << 5); // Bit 5 = Kill switch enabled
+      HAL_GPIO_WritePin(GPIOC, GPIO_PIN_15, SET); // Turn on kill switch LED
+    }
+    else {
+      kill_switch = false;
+      TxData_status[1] &= ~(1 << 5); // Bit 5 = Kill switch disabled
+      HAL_GPIO_WritePin(GPIOC, GPIO_PIN_15, RESET); // Turn off kill switch LED
+    }
 
 		while(!HAL_CAN_GetTxMailboxesFreeLevel(&hcan1));
 		HAL_StatusTypeDef status;
@@ -191,6 +200,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_PIN)
 		else if(status == HAL_BUSY){
 			HAL_CAN_BUSY++;
 		}
+
 	}
 }
 
@@ -367,6 +377,15 @@ int main(void)
   if(INA226_Initialize(&INA226_IVP, &hi2c2, 10, 20) != HAL_OK){ Error_Handler();}
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_2, RESET);
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_3, RESET);
+
+  if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13) == RESET) {
+    kill_switch = true;
+    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_15, SET); // Turn on kill switch LED
+  }
+  else {
+    kill_switch = false;
+    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_15, RESET); // Turn off kill switch LED
+  }
 
   /* USER CODE END 2 */
 
@@ -753,7 +772,7 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin : PC13 */
   GPIO_InitStruct.Pin = GPIO_PIN_13;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
@@ -844,8 +863,20 @@ void Update_Throttle(void *argument)
     if (HAL_GetTick() - last_throttle_recieved_tick > 300) {
       throttle = 0; // Set throttle to 0 if no message received for .3 second
     }
-	  HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, throttle);
-    
+
+    if (throttle > 0) {
+    	volatile int testing = 1000;
+    	testing++;
+    }
+
+    if (kill_switch || HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13) == GPIO_PIN_RESET) {
+      HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, 0); // Set throttle to 0 if kill switch is on
+    }
+    else {
+	    HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, throttle);
+    }
+
+
     if (regen_enable && throttle == 0) {
       regen = 2500; // also try 2048
     } else {
