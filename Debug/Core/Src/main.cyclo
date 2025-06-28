@@ -11,6 +11,6 @@
 ../Core/Src/main.c:830:6:Heart_Beat	1
 ../Core/Src/main.c:853:6:Update_Throttle	17
 ../Core/Src/main.c:947:6:Lights_Control	10
-../Core/Src/main.c:1022:6:Read_Sensors	11
-../Core/Src/main.c:1103:6:HAL_TIM_PeriodElapsedCallback	2
-../Core/Src/main.c:1120:6:Error_Handler	1
+../Core/Src/main.c:1024:6:Read_Sensors	11
+../Core/Src/main.c:1105:6:HAL_TIM_PeriodElapsedCallback	2
+../Core/Src/main.c:1122:6:Error_Handler	1
