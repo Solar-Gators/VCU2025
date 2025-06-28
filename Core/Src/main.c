@@ -179,7 +179,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_PIN)
 	if (GPIO_PIN == GPIO_PIN_13) {
 		//OR current byte 1 to show enable the kill switch
 
-    if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13) == RESET) {
+    if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13) == GPIO_PIN_RESET) {
       kill_switch = true;
       TxData_status[1] |= (1 << 5); // Bit 5 = Kill switch enabled
       HAL_GPIO_WritePin(GPIOC, GPIO_PIN_15, SET); // Turn on kill switch LED
@@ -378,7 +378,7 @@ int main(void)
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_2, RESET);
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_3, RESET);
 
-  if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13) == RESET) {
+  if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13) == GPIO_PIN_RESET) {
     kill_switch = true;
     HAL_GPIO_WritePin(GPIOC, GPIO_PIN_15, SET); // Turn on kill switch LED
   }
@@ -954,7 +954,9 @@ void Lights_Control(void *argument)
   {
 	  if (blinkers_active) {
 		  if (signal_counter < 5) {
+        // rear left light
 			  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, RESET);
+        // rear right light
 			  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_1, RESET);
 		  }
 		  else {
@@ -1122,6 +1124,10 @@ void Error_Handler(void)
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
   __disable_irq();
+
+  HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, 0); // Set throttle to 0 if kill switch is on
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0, GPIO_PIN_SET); // should turn off mc
+  
   while (1)
   {
   }
