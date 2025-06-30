@@ -169,9 +169,12 @@ uint8_t datacheck = 0;
 int HAL_CAN_BUSY = 0;
 uint64_t messages_sent = 0;
 
-CAN_TxHeaderTypeDef TxHeader_status;
+CAN_TxHeaderTypeDef TxHeader_status = { 0 };
 uint8_t TxData_status[8] = { 0 };
 uint32_t TxMailbox_status = { 0 };
+
+uint32_t last_strobe_toggle_tick = 0;
+uint8_t strobe = 0;
 
 //CAN tranmission with kill_switch
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_PIN)
@@ -183,11 +186,14 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_PIN)
       kill_switch = true;
       TxData_status[1] |= (1 << 5); // Bit 5 = Kill switch enabled
       HAL_GPIO_WritePin(GPIOC, GPIO_PIN_15, SET); // Turn on kill switch LED
+      strobe = 1;
+      last_strobe_toggle_tick = HAL_GetTick();
     }
     else {
-      kill_switch = false;
-      TxData_status[1] &= ~(1 << 5); // Bit 5 = Kill switch disabled
-      HAL_GPIO_WritePin(GPIOC, GPIO_PIN_15, RESET); // Turn off kill switch LED
+      // kill_switch = false;
+      // TxData_status[1] &= ~(1 << 5); // Bit 5 = Kill switch disabled
+      // HAL_GPIO_WritePin(GPIOC, GPIO_PIN_15, RESET); // Turn off kill switch LED
+      // strobe = 0;
     }
 
 		while(!HAL_CAN_GetTxMailboxesFreeLevel(&hcan1));
@@ -1025,23 +1031,25 @@ void Read_Sensors(void *argument)
 {
   /* USER CODE BEGIN Read_Sensors */
 
-	CAN_TxHeaderTypeDef TxHeader;
-	uint8_t TxData[8] = { 0 };
-	uint32_t TxMailbox = { 0 };
-
-	TxHeader.IDE = CAN_ID_STD; // Standard ID (not extended)
-	TxHeader.StdId = 0x07; // 11 bit Identifier
-	TxHeader.RTR = CAN_RTR_DATA; // Std RTR Data frame
-	TxHeader.DLC = 8; // 8 bytes being transmitted
+	TxHeader_status.IDE = CAN_ID_STD; // Standard ID (not extended)
+	TxHeader_status.StdId = 0x07; // 11 bit Identifier
+	TxHeader_status.RTR = CAN_RTR_DATA; // Std RTR Data frame
+	TxHeader_status.DLC = 8; // 8 bytes being transmitted
 
 	//Message ID 2 for VCU
-	TxData[0] = 7;
+	TxData_status[0] = 7;
 
-	HAL_CAN_AddTxMessage(&hcan1, &TxHeader, TxData, &TxMailbox);
+	// HAL_CAN_AddTxMessage(&hcan1, &TxHeader, TxData, &TxMailbox);
 
   /* Infinite loop */
   for(;;)
   {
+
+    if (strobe && HAL_GetTick() - last_strobe_toggle_tick > 500) {
+      last_strobe_toggle_tick = HAL_GetTick();
+      HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_15); // Toggle strobe LED
+    }
+
 	  //INA226_t *data = (INA226_t *)argument;
 	  INA226_IVP.current = getCurrentAmp(&INA226_IVP);
 	  INA226_IVP.power = getPowerWatt(&INA226_IVP);
@@ -1050,11 +1058,11 @@ void Read_Sensors(void *argument)
     power.f = INA226_IVP.power;
 
 	  //Assign CAN message
-	  TxData[2] = power.bytes[0]; //LSB
-	  TxData[3] = power.bytes[1];
-	  TxData[4] = power.bytes[2];
-	  TxData[5] = power.bytes[3]; //MSB
-
+	  TxData_status[2] = power.bytes[0]; //LSB
+	  TxData_status[3] = power.bytes[1];
+	  TxData_status[4] = power.bytes[2];
+	  TxData_status[5] = power.bytes[3]; //MSB
+/*
 	  while(!HAL_CAN_GetTxMailboxesFreeLevel(&hcan1));
 	  HAL_StatusTypeDef status;
 	  status = HAL_CAN_AddTxMessage(&hcan1, &TxHeader, TxData, &TxMailbox);
@@ -1065,7 +1073,7 @@ void Read_Sensors(void *argument)
 	  else if(status == HAL_BUSY){
 		  HAL_CAN_BUSY++;
 	  }
-
+*/
     // also send status message
     TxData_status[1] = 0; // Reset status byte
     // for byte 1, bit 0 = mc, bit 1 = array, bit 2 = kill switch
