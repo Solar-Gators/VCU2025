@@ -181,7 +181,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_PIN)
 {
 	if (GPIO_PIN == GPIO_PIN_13) {
 		//OR current byte 1 to show enable the kill switch
-
+		HAL_Delay(5);
     if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13) == GPIO_PIN_RESET) {
       kill_switch = true;
       TxData_status[1] |= (1 << 5); // Bit 5 = Kill switch enabled
@@ -386,6 +386,7 @@ int main(void)
 
   if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13) == GPIO_PIN_RESET) {
     kill_switch = true;
+    strobe = 1;
     HAL_GPIO_WritePin(GPIOC, GPIO_PIN_15, SET); // Turn on kill switch LED
   }
   else {
@@ -902,20 +903,20 @@ void Update_Throttle(void *argument)
 		  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0, GPIO_PIN_SET);
 	  }
 
-	  if(mc_pwreco_ctrl){
-		  //closed power
-		  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_RESET);
-	  }else{
-		  //open eco
-		  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_SET);
-	  }
+//	  if(mc_pwreco_ctrl){
+//		  //closed power
+//		  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_RESET);
+//	  }else{
+//		  //open eco
+//		  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_SET);
+//	  }
 
 	  if(direction == true){
 		  //closed forward
-		  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, RESET);
+		  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, RESET);
 	  }else{
 		  //open backward
-		  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, SET);
+		  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, SET);
 	  }
 
     // enable precharger for 250ms before enabling array contactor
