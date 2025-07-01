@@ -385,6 +385,7 @@ int main(void)
   }
   else {
     kill_switch = false;
+    strobe = false;
     HAL_GPIO_WritePin(GPIOC, GPIO_PIN_15, RESET); // Turn off kill switch LED
   }
 
@@ -753,8 +754,8 @@ static void MX_TIM1_Init(void)
 static void MX_GPIO_Init(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
-/* USER CODE BEGIN MX_GPIO_Init_1 */
-/* USER CODE END MX_GPIO_Init_1 */
+  /* USER CODE BEGIN MX_GPIO_Init_1 */
+  /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOC_CLK_ENABLE();
@@ -773,6 +774,7 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin : PC13 */
   GPIO_InitStruct.Pin = GPIO_PIN_13;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
@@ -804,10 +806,10 @@ static void MX_GPIO_Init(void)
   HAL_NVIC_SetPriority(EXTI15_10_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
-/* USER CODE BEGIN MX_GPIO_Init_2 */
+  /* USER CODE BEGIN MX_GPIO_Init_2 */
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0, SET);
 
-/* USER CODE END MX_GPIO_Init_2 */
+  /* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
@@ -965,9 +967,13 @@ void Lights_Control(void *argument)
   /* USER CODE BEGIN Lights_Control */
   //left_turn_active = true;
 
+  bool toggle_state = false;
+  uint32_t last_toggle_tick = 0;
+
   /* Infinite loop */
   for(;;)
   {
+    /*
 	  if (blinkers_active) {
 		  if (signal_counter < 5) {
         // rear left light
@@ -1026,6 +1032,42 @@ void Lights_Control(void *argument)
 	  }
 	  signal_counter = signal_counter%10;
 	  osDelay(100);
+    */
+
+    // vars = left_turn_active, right_turn_active, brakes_active,blinkers_active
+    // toggle_state, last_toggle_tick
+    
+    if (HAL_GetTick() - last_toggle_tick > 500) {
+      last_toggle_tick = HAL_GetTick();
+      toggle_state = !toggle_state;
+    }
+
+    // control left light == GPIOC, GPIO_PIN_14
+    if (left_turn_active || blinkers_active) {
+      HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, toggle_state ? SET : RESET);
+    } else if (brakes_active){
+      HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, SET);
+    } else {
+      HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, RESET);
+    }
+
+    // control right light == GPIOC, GPIO_PIN_1
+    if (right_turn_active || blinkers_active) {
+      HAL_GPIO_WritePin(GPIOC, GPIO_PIN_1, toggle_state ? SET : RESET);
+    } else if (brakes_active){
+      HAL_GPIO_WritePin(GPIOC, GPIO_PIN_1, SET);
+    } else {
+      HAL_GPIO_WritePin(GPIOC, GPIO_PIN_1, RESET);
+    }
+
+    // control center light == GPIOC, GPIO_PIN_0
+    if (brakes_active) {
+      HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0, SET);
+    } else {
+      HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0, RESET);
+    }
+
+    osDelay(100);
   }
   /* USER CODE END Lights_Control */
 }
@@ -1126,7 +1168,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   /* USER CODE BEGIN Callback 0 */
 
   /* USER CODE END Callback 0 */
-  if (htim->Instance == TIM6) {
+  if (htim->Instance == TIM6)
+  {
     HAL_IncTick();
   }
   /* USER CODE BEGIN Callback 1 */
