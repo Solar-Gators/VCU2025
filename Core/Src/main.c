@@ -176,38 +176,31 @@ uint32_t TxMailbox_status = { 0 };
 uint32_t last_strobe_toggle_tick = 0;
 uint8_t strobe = 0;
 
+uint8_t kill_int = 0;
+
 //CAN tranmission with kill_switch
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_PIN)
 {
 	if (GPIO_PIN == GPIO_PIN_13) {
 		//OR current byte 1 to show enable the kill switch
-		HAL_Delay(5);
-    if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13) == GPIO_PIN_RESET) {
-      kill_switch = true;
-      TxData_status[1] |= (1 << 5); // Bit 5 = Kill switch enabled
-      HAL_GPIO_WritePin(GPIOC, GPIO_PIN_15, SET); // Turn on kill switch LED
-      strobe = 1;
-      last_strobe_toggle_tick = HAL_GetTick();
-    }
-    else {
-      // kill_switch = false;
-      // TxData_status[1] &= ~(1 << 5); // Bit 5 = Kill switch disabled
-      // HAL_GPIO_WritePin(GPIOC, GPIO_PIN_15, RESET); // Turn off kill switch LED
-      // strobe = 0;
+		kill_int = 1;
+
+
+
     }
 
-		while(!HAL_CAN_GetTxMailboxesFreeLevel(&hcan1));
-		HAL_StatusTypeDef status;
-		status = HAL_CAN_AddTxMessage(&hcan1, &TxHeader_status, TxData_status, &TxMailbox_status);
-		messages_sent++;
-		if (status == HAL_ERROR){
-			Error_Handler();
-		}
-		else if(status == HAL_BUSY){
-			HAL_CAN_BUSY++;
-		}
+//		while(!HAL_CAN_GetTxMailboxesFreeLevel(&hcan1));
+//		HAL_StatusTypeDef status;
+//		status = HAL_CAN_AddTxMessage(&hcan1, &TxHeader_status, TxData_status, &TxMailbox_status);
+//		messages_sent++;
+//		if (status == HAL_ERROR){
+//			Error_Handler();
+//		}
+//		else if(status == HAL_BUSY){
+//			HAL_CAN_BUSY++;
+//		}
 
-	}
+
 }
 
 // Can reception
@@ -387,6 +380,7 @@ int main(void)
   if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13) == GPIO_PIN_RESET) {
     kill_switch = true;
     strobe = 1;
+    last_strobe_toggle_tick = HAL_GetTick();
     HAL_GPIO_WritePin(GPIOC, GPIO_PIN_15, SET); // Turn on kill switch LED
   }
   else {
@@ -779,7 +773,7 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin : PC13 */
   GPIO_InitStruct.Pin = GPIO_PIN_13;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
@@ -837,11 +831,26 @@ static void MX_GPIO_Init(void)
 void Heart_Beat(void *argument)
 {
   /* USER CODE BEGIN 5 */
-
+	bool once = false;
 
   /* Infinite loop */
   for(;;)
   {
+	  if(kill_int){
+		  if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13) == GPIO_PIN_RESET) {
+				  kill_switch = true;
+				  TxData_status[1] |= (1 << 5); // Bit 5 = Kill switch enabled
+
+				  strobe = 1;
+				  if (!once) {
+					  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_15, SET); // Turn on kill switch LED
+					  last_strobe_toggle_tick = HAL_GetTick();
+					  once = true;
+				  }
+		  } else {
+			  kill_int = 0;
+		  }
+	  }
 	HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_13);
     osDelay(500);
   }
@@ -1075,6 +1084,7 @@ void Read_Sensors(void *argument)
 		  HAL_CAN_BUSY++;
 	  }
 */
+
     // also send status message
     TxData_status[1] = 0; // Reset status byte
     // for byte 1, bit 0 = mc, bit 1 = array, bit 2 = kill switch
