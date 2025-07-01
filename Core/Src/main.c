@@ -305,6 +305,17 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan1)
 
 	  }
   }
+  // from bms - power consumption information
+  if (RxHeader.IDE == CAN_ID_STD && RxHeader.StdId == 0x06) {
+    uint8_t fault = RxData[0];
+    if (fault != 0) {
+      // trip kill switch
+      kill_switch = true;
+      strobe = 1;
+      last_strobe_toggle_tick = HAL_GetTick();
+      HAL_GPIO_WritePin(GPIOC, GPIO_PIN_15, SET); // Turn on kill switch LED
+    }
+  }
 }
 
 INA226_t INA226_IVP;
