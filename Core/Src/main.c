@@ -148,6 +148,7 @@ float power;
 uint16_t powerInteger;
 uint8_t powerLSB;
 uint8_t powerMSB;
+uint8_t test_once = 1;
 
 //IMU
 //uint8_t imuAddress = 0x68;
@@ -185,8 +186,6 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_PIN)
 		//OR current byte 1 to show enable the kill switch
 		kill_int = 1;
 
-
-
     }
 
 //		while(!HAL_CAN_GetTxMailboxesFreeLevel(&hcan1));
@@ -217,6 +216,18 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan1)
 	  if (RxData[0] == 0) {
       last_throttle_recieved_tick = HAL_GetTick();
 		  throttle = (uint16_t)RxData[2]<<8 | RxData[1];
+	  }
+  }
+
+  if (RxHeader.StdId == 0x06 && RxHeader.IDE == CAN_ID_STD) {
+	  if (RxData[0] != 0) {
+		  kill_switch = true;
+		  strobe = 1;
+		  if (!test_once) {
+			  last_strobe_toggle_tick = HAL_GetTick();
+			  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_15, SET);
+			  test_once = true;
+		  }
 	  }
   }
   if (RxHeader.StdId == 0x7FF && RxHeader.IDE == CAN_ID_STD) {
@@ -304,17 +315,6 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan1)
       }
 
 	  }
-  }
-  // from bms - power consumption information
-  if (RxHeader.IDE == CAN_ID_STD && RxHeader.StdId == 0x06) {
-    uint8_t fault = RxData[0];
-    if (fault != 0) {
-      // trip kill switch
-      kill_switch = true;
-      strobe = 1;
-      last_strobe_toggle_tick = HAL_GetTick();
-      HAL_GPIO_WritePin(GPIOC, GPIO_PIN_15, SET); // Turn on kill switch LED
-    }
   }
 }
 
@@ -819,6 +819,10 @@ static void MX_GPIO_Init(void)
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0, SET);
+
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, SET);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, SET);
+
 
   /* USER CODE END MX_GPIO_Init_2 */
 }
